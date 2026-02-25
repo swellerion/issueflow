@@ -1,0 +1,81 @@
+generator client {
+  provider = "prisma-client"
+  output   = "../app/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+model User {
+  id           String   @id @default(cuid())
+  username     String   @unique
+  passwordHash String
+  createdAt    DateTime @default(now())
+
+  authoredIssues Issue[]   @relation("IssueAuthor")
+  assignedIssues Issue[]   @relation("IssueAssignee")
+  comments       Comment[]
+}
+
+model Project {
+  id        String   @id @default(cuid())
+  name      String
+  slug      String   @unique
+  createdAt DateTime @default(now())
+
+  statuses Status[]
+  issues   Issue[]
+}
+
+model Status {
+  id        String @id @default(cuid())
+  name      String
+  color     String @default("#6366f1")
+  position  Int
+  projectId String
+
+  project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  issues  Issue[]
+
+  @@unique([projectId, position])
+  @@unique([projectId, name])
+}
+
+model Issue {
+  id          String   @id @default(cuid())
+  identifier  String   @unique
+  title       String
+  description String?
+  position    Int      @default(0)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  projectId  String
+  statusId   String
+  authorId   String
+  assigneeId String?
+
+  project  Project   @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  status   Status    @relation(fields: [statusId], references: [id])
+  author   User      @relation("IssueAuthor", fields: [authorId], references: [id])
+  assignee User?     @relation("IssueAssignee", fields: [assigneeId], references: [id])
+  comments Comment[]
+
+  @@index([projectId])
+  @@index([statusId])
+}
+
+model Comment {
+  id        String   @id @default(cuid())
+  body      String
+  createdAt DateTime @default(now())
+
+  issueId  String
+  authorId String
+
+  issue  Issue @relation(fields: [issueId], references: [id], onDelete: Cascade)
+  author User  @relation(fields: [authorId], references: [id])
+
+  @@index([issueId])
+}

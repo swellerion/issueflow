@@ -1,0 +1,116 @@
+import { db } from "@/lib/db";
+
+const safeUserSelect = {
+  id: true,
+  username: true,
+} as const;
+
+export type CreateIssueInput = {
+  title: string;
+  description?: string;
+  statusId: string;
+  projectId: string;
+  authorId: string;
+  assigneeId?: string;
+};
+
+export type UpdateIssueInput = {
+  statusId?: string;
+  assigneeId?: string | null;
+  title?: string;
+  description?: string;
+};
+
+export async function createIssue(input: CreateIssueInput) {
+  const title = input.title.trim();
+  if (title.length < 1) {
+    throw new Error("Issue title is required.");
+  }
+  if (title.length > 255) {
+    throw new Error("Issue title must be 255 characters or fewer.");
+  }
+
+  return db.$transaction(async (tx) => {
+    const project = await tx.project.findUnique({
+      where: { id: input.projectId },
+      select: { slug: true },
+    });
+    if (!project) throw new Error("Project not found.");
+
+    const count = await tx.issue.count({ where: { projectId: input.projectId } });
+    const identifier = `${project.slug.toUpperCase()}-${count + 1}`;
+
+    return tx.issue.create({
+      data: {
+        identifier,
+        title,
+        description: input.description?.trim() || null,
+        statusId: input.statusId,
+        projectId: input.projectId,
+        authorId: input.authorId,
+        assigneeId: input.assigneeId ?? null,
+        position: count,
+      },
+      include: {
+        status: true,
+        author: { select: safeUserSelect },
+        assignee: { select: safeUserSelect },
+      },
+    });
+  });
+}
+
+export async function getIssueById(id: string) {
+  return db.issue.findUnique({
+    where: { id },
+    include: {
+      status: true,
+      author: { select: safeUserSelect },
+      assignee: { select: safeUserSelect },
+      comments: {
+        include: { author: { select: safeUserSelect } },
+        orderBy: { createdAt: "asc" },
+      },
+      project: {
+        include: { statuses: { orderBy: { position: "asc" } } },
+      },
+    },
+  });
+}
+
+export async function updateIssue(id: string, input: UpdateIssueInput) {
+  return db.issue.update({
+    where: { id },
+    data: {
+      ...(input.statusId !== undefined && { statusId: input.statusId }),
+      ...(input.assigneeId !== undefined && { assigneeId: input.assigneeId }),
+      ...(input.title !== undefined && { title: input.title.trim() }),
+      ...(input.description !== undefined && { description: input.description.trim() || null }),
+    },
+    include: {
+      status: true,
+      author: { select: safeUserSelect },
+      assignee: { select: safeUserSelect },
+    },
+  });
+}
+
+export async function getProjectBoard(projectId: string) {
+  const [project, issues] = await Promise.all([
+    db.project.findUnique({
+      where: { id: projectId },
+      include: { statuses: { orderBy: { position: "asc" } } },
+    }),
+    db.issue.findMany({
+      where: { projectId },
+      include: {
+        author: { select: safeUserSelect },
+        assignee: { select: safeUserSelect },
+        status: true,
+      },
+      orderBy: { position: "asc" },
+    }),
+  ]);
+
+  return { project, issues };
+}
