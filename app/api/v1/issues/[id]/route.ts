@@ -1,6 +1,9 @@
 import { NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { getIssueById, updateIssue } from "@/lib/services/issues.service";
+import { getMembership } from "@/lib/services/projects.service";
+import { getUserFlags } from "@/lib/services/users.service";
+import { canEditIssue } from "@/lib/permissions";
 
 export async function GET(
   _request: Request,
@@ -25,7 +28,7 @@ export async function PATCH(
   { params }: { params: Promise<{ id: string }> }
 ) {
   const session = await auth();
-  if (!session?.user) {
+  if (!session?.user?.id) {
     return NextResponse.json({ error: "Unauthorized." }, { status: 401 });
   }
 
@@ -40,12 +43,22 @@ export async function PATCH(
 
   const { statusId, assigneeId, title, description } = body as Record<string, unknown>;
 
+  // Fetch issue first so we can check project membership
+  const issue = await getIssueById(id);
+  if (!issue) {
+    return NextResponse.json({ error: "Issue not found." }, { status: 404 });
+  }
+
+  const [membership, currentUser] = await Promise.all([
+    getMembership(issue.project.id, session.user.id),
+    getUserFlags(session.user.id),
+  ]);
+  if (!canEditIssue(membership?.role ?? null, currentUser?.isSuperAdmin ?? false)) {
+    return NextResponse.json({ error: "Forbidden." }, { status: 403 });
+  }
+
   // Validate statusId belongs to the issue's project
   if (typeof statusId === "string") {
-    const issue = await getIssueById(id);
-    if (!issue) {
-      return NextResponse.json({ error: "Issue not found." }, { status: 404 });
-    }
     const validStatus = issue.project.statuses.find((s) => s.id === statusId);
     if (!validStatus) {
       return NextResponse.json({ error: "Invalid statusId for this project." }, { status: 422 });

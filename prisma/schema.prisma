@@ -7,15 +7,24 @@ datasource db {
   provider = "postgresql"
 }
 
+enum ProjectRole {
+  ADMIN
+  MEMBER
+  VIEWER
+}
+
 model User {
   id           String   @id @default(cuid())
   username     String   @unique
   passwordHash String
+  isSuperAdmin Boolean  @default(false)
   createdAt    DateTime @default(now())
 
-  authoredIssues Issue[]   @relation("IssueAuthor")
-  assignedIssues Issue[]   @relation("IssueAssignee")
+  authoredIssues Issue[]             @relation("IssueAuthor")
+  assignedIssues Issue[]             @relation("IssueAssignee")
   comments       Comment[]
+  projects       Project[]
+  memberships    ProjectMembership[]
 }
 
 model Project {
@@ -23,9 +32,26 @@ model Project {
   name      String
   slug      String   @unique
   createdAt DateTime @default(now())
+  ownerId   String
 
-  statuses Status[]
-  issues   Issue[]
+  owner       User                @relation(fields: [ownerId], references: [id])
+  statuses    Status[]
+  issues      Issue[]
+  memberships ProjectMembership[]
+}
+
+model ProjectMembership {
+  id        String      @id @default(cuid())
+  projectId String
+  userId    String
+  role      ProjectRole
+  createdAt DateTime    @default(now())
+
+  project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  user    User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([projectId, userId])
+  @@index([userId])
 }
 
 model Status {

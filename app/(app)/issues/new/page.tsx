@@ -1,4 +1,5 @@
 import { redirect } from "next/navigation";
+import { auth } from "@/lib/auth";
 import { getProjects } from "@/lib/services/projects.service";
 import { getUsers } from "@/lib/services/users.service";
 import { NewIssueForm } from "@/components/issues/new-issue-form";
@@ -8,7 +9,10 @@ type Props = {
 };
 
 export default async function NewIssuePage({ searchParams }: Props) {
-  const [projects, users] = await Promise.all([getProjects(), getUsers()]);
+  const session = await auth();
+  if (!session?.user?.id) redirect("/login");
+
+  const [projects, users] = await Promise.all([getProjects(session.user.id), getUsers()]);
 
   if (projects.length === 0) redirect("/projects/new");
 

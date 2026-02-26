@@ -22,7 +22,7 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "title and statusId are required." }, { status: 400 });
   }
 
-  const projects = await getProjects();
+  const projects = await getProjects(session.user.id);
   if (projects.length === 0) {
     return NextResponse.json({ error: "No project found." }, { status: 404 });
   }

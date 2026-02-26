@@ -32,9 +32,10 @@ type Issue = {
 type BoardProps = {
   statuses: Status[];
   issues: Issue[];
+  canEdit: boolean;
 };
 
-export function Board({ statuses, issues: initialIssues }: BoardProps) {
+export function Board({ statuses, issues: initialIssues, canEdit }: BoardProps) {
   const [issues, setIssues] = useState<Issue[]>(initialIssues);
   const [activeIssue, setActiveIssue] = useState<Issue | null>(null);
 
@@ -107,13 +108,14 @@ export function Board({ statuses, issues: initialIssues }: BoardProps) {
             name={status.name}
             color={status.color}
             issues={issuesByStatus[status.id] ?? []}
+            canEdit={canEdit}
           />
         ))}
       </div>
 
       <DragOverlay dropAnimation={null}>
         {activeIssue && (
-          <IssueCard {...activeIssue} overlay />
+          <IssueCard {...activeIssue} canEdit={canEdit} overlay />
         )}
       </DragOverlay>
     </DndContext>

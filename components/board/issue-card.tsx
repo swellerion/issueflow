@@ -13,10 +13,11 @@ type IssueCardProps = {
   title: string;
   statusId: string;
   assignee: { id: string; username: string } | null;
+  canEdit: boolean;
   overlay?: boolean;
 };
 
-export function IssueCard({ id, identifier, title, statusId, assignee, overlay }: IssueCardProps) {
+export function IssueCard({ id, identifier, title, statusId, assignee, canEdit, overlay }: IssueCardProps) {
   const { attributes, listeners, setNodeRef, transform, isDragging } = useDraggable({
     id,
     data: { statusId },
@@ -30,21 +31,24 @@ export function IssueCard({ id, identifier, title, statusId, assignee, overlay }
     <div
       ref={setNodeRef}
       style={style}
+      data-testid={`issue-card-${id}`}
       className={`group flex items-start gap-1 rounded-md border bg-card shadow-sm transition-all
         ${isDragging && !overlay ? "opacity-40" : ""}
         ${overlay ? "shadow-lg rotate-1 cursor-grabbing" : "hover:shadow-md hover:border-primary/40"}
       `}
     >
-      {/* Drag handle */}
-      <button
-        {...listeners}
-        {...attributes}
-        className="shrink-0 p-2 pt-2.5 text-muted-foreground/30 hover:text-muted-foreground cursor-grab active:cursor-grabbing transition-colors touch-none"
-        tabIndex={-1}
-        aria-label="Drag to move issue"
-      >
-        <GripVertical className="h-3.5 w-3.5" />
-      </button>
+      {/* Drag handle — only visible to editors */}
+      {canEdit && (
+        <button
+          {...listeners}
+          {...attributes}
+          className="shrink-0 p-2 pt-2.5 text-muted-foreground/30 hover:text-muted-foreground cursor-grab active:cursor-grabbing transition-colors touch-none"
+          tabIndex={-1}
+          aria-label="Drag to move issue"
+        >
+          <GripVertical className="h-3.5 w-3.5" />
+        </button>
+      )}
 
       {/* Card content — clickable for navigation */}
       <Link href={`/issues/${id}`} className="flex-1 py-2.5 pr-3 space-y-2 min-w-0">

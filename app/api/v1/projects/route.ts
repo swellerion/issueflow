@@ -4,12 +4,12 @@ import { createProject, getProjects } from "@/lib/services/projects.service";
 
 export async function GET() {
   const session = await auth();
-  if (!session?.user) {
+  if (!session?.user?.id) {
     return NextResponse.json({ error: "Unauthorized." }, { status: 401 });
   }
 
   try {
-    const projects = await getProjects();
+    const projects = await getProjects(session.user.id);
     return NextResponse.json(projects);
   } catch (error) {
     console.error("[GET /api/v1/projects]", error);
@@ -19,7 +19,7 @@ export async function GET() {
 
 export async function POST(request: Request) {
   const session = await auth();
-  if (!session?.user) {
+  if (!session?.user?.id) {
     return NextResponse.json({ error: "Unauthorized." }, { status: 401 });
   }
 
@@ -45,7 +45,7 @@ export async function POST(request: Request) {
   const { name, slug } = body as { name: string; slug: string };
 
   try {
-    const project = await createProject({ name, slug });
+    const project = await createProject({ name, slug, userId: session.user.id });
     return NextResponse.json(project, { status: 201 });
   } catch (error) {
     const message = error instanceof Error ? error.message : "Failed to create project.";

@@ -6,6 +6,7 @@ import Link from "next/link";
 import { ArrowLeft } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Separator } from "@/components/ui/separator";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
@@ -43,6 +44,7 @@ type Issue = {
 type Props = {
   issue: Issue;
   users: User[];
+  canEdit: boolean;
 };
 
 function formatDate(value: Date | string) {
@@ -53,7 +55,7 @@ function formatDate(value: Date | string) {
   });
 }
 
-export function IssueDetail({ issue, users }: Props) {
+export function IssueDetail({ issue, users, canEdit }: Props) {
   const router = useRouter();
   const [statusId, setStatusId] = useState(issue.statusId);
   const [assigneeId, setAssigneeId] = useState(issue.assignee?.id ?? "none");
@@ -61,25 +63,49 @@ export function IssueDetail({ issue, users }: Props) {
   const [submittingComment, setSubmittingComment] = useState(false);
   const [commentError, setCommentError] = useState<string | null>(null);
 
-  async function handleStatusChange(newStatusId: string) {
-    setStatusId(newStatusId);
+  // Inline title editing
+  const [editingTitle, setEditingTitle] = useState(false);
+  const [titleValue, setTitleValue] = useState(issue.title);
+
+  // Inline description editing
+  const [editingDescription, setEditingDescription] = useState(false);
+  const [descriptionValue, setDescriptionValue] = useState(issue.description ?? "");
+
+  async function patchIssue(data: Record<string, unknown>) {
     await fetch(`/api/v1/issues/${issue.id}`, {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ statusId: newStatusId }),
+      body: JSON.stringify(data),
     });
     router.refresh();
+  }
+
+  async function handleStatusChange(newStatusId: string) {
+    setStatusId(newStatusId);
+    await patchIssue({ statusId: newStatusId });
   }
 
   async function handleAssigneeChange(value: string) {
     const newAssigneeId = value === "none" ? null : value;
     setAssigneeId(value);
-    await fetch(`/api/v1/issues/${issue.id}`, {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ assigneeId: newAssigneeId }),
-    });
-    router.refresh();
+    await patchIssue({ assigneeId: newAssigneeId });
+  }
+
+  async function handleTitleSave() {
+    setEditingTitle(false);
+    const trimmed = titleValue.trim();
+    if (trimmed && trimmed !== issue.title) {
+      await patchIssue({ title: trimmed });
+    } else {
+      setTitleValue(issue.title);
+    }
+  }
+
+  async function handleDescriptionSave() {
+    setEditingDescription(false);
+    if (descriptionValue !== (issue.description ?? "")) {
+      await patchIssue({ description: descriptionValue });
+    }
   }
 
   async function handleAddComment(e: React.FormEvent) {
@@ -135,10 +161,65 @@ export function IssueDetail({ issue, users }: Props) {
                 {currentStatus.name}
               </Badge>
             </div>
-            <h1 className="text-2xl font-semibold">{issue.title}</h1>
+
+            {/* Title — inline editable for ADMIN/MEMBER */}
+            {canEdit && editingTitle ? (
+              <Input
+                autoFocus
+                value={titleValue}
+                onChange={(e) => setTitleValue(e.target.value)}
+                onBlur={handleTitleSave}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") handleTitleSave();
+                  if (e.key === "Escape") {
+                    setTitleValue(issue.title);
+                    setEditingTitle(false);
+                  }
+                }}
+                className="text-2xl font-semibold h-auto py-1"
+              />
+            ) : (
+              <h1
+                className={`text-2xl font-semibold ${canEdit ? "cursor-pointer hover:bg-muted/50 rounded px-1 -mx-1" : ""}`}
+                onClick={() => canEdit && setEditingTitle(true)}
+              >
+                {titleValue}
+              </h1>
+            )}
           </div>
 
-          {issue.description ? (
+          {/* Description — inline editable for ADMIN/MEMBER */}
+          {canEdit && editingDescription ? (
+            <Textarea
+              autoFocus
+              value={descriptionValue}
+              onChange={(e) => setDescriptionValue(e.target.value)}
+              onBlur={handleDescriptionSave}
+              onKeyDown={(e) => {
+                if (e.key === "Escape") {
+                  setDescriptionValue(issue.description ?? "");
+                  setEditingDescription(false);
+                }
+              }}
+              rows={5}
+              placeholder="Add a description…"
+            />
+          ) : canEdit ? (
+            <div
+              className="cursor-pointer rounded px-1 -mx-1 hover:bg-muted/50 min-h-[2rem]"
+              onClick={() => setEditingDescription(true)}
+            >
+              {descriptionValue ? (
+                <p className="text-sm text-muted-foreground whitespace-pre-wrap leading-relaxed">
+                  {descriptionValue}
+                </p>
+              ) : (
+                <p className="text-sm text-muted-foreground italic">
+                  Click to add a description…
+                </p>
+              )}
+            </div>
+          ) : issue.description ? (
             <p className="text-sm text-muted-foreground whitespace-pre-wrap leading-relaxed">
               {issue.description}
             </p>
@@ -216,43 +297,61 @@ export function IssueDetail({ issue, users }: Props) {
             <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
               Status
             </p>
-            <Select value={statusId} onValueChange={handleStatusChange}>
-              <SelectTrigger className="h-8">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                {issue.project.statuses.map((s) => (
-                  <SelectItem key={s.id} value={s.id}>
-                    <span className="flex items-center gap-2">
-                      <span
-                        className="h-2 w-2 rounded-full"
-                        style={{ backgroundColor: s.color }}
-                      />
-                      {s.name}
-                    </span>
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+            {canEdit ? (
+              <Select value={statusId} onValueChange={handleStatusChange}>
+                <SelectTrigger className="h-8">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {issue.project.statuses.map((s) => (
+                    <SelectItem key={s.id} value={s.id}>
+                      <span className="flex items-center gap-2">
+                        <span
+                          className="h-2 w-2 rounded-full"
+                          style={{ backgroundColor: s.color }}
+                        />
+                        {s.name}
+                      </span>
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            ) : (
+              <div className="flex h-8 items-center gap-2 rounded-md border px-3">
+                <span
+                  className="h-2 w-2 rounded-full shrink-0"
+                  style={{ backgroundColor: currentStatus.color }}
+                />
+                <span className="text-sm">{currentStatus.name}</span>
+              </div>
+            )}
           </div>
 
           <div className="space-y-1.5">
             <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
               Assignee
             </p>
-            <Select value={assigneeId} onValueChange={handleAssigneeChange}>
-              <SelectTrigger className="h-8">
-                <SelectValue placeholder="Unassigned" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="none">Unassigned</SelectItem>
-                {users.map((u) => (
-                  <SelectItem key={u.id} value={u.id}>
-                    {u.username}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+            {canEdit ? (
+              <Select value={assigneeId} onValueChange={handleAssigneeChange}>
+                <SelectTrigger className="h-8">
+                  <SelectValue placeholder="Unassigned" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="none">Unassigned</SelectItem>
+                  {users.map((u) => (
+                    <SelectItem key={u.id} value={u.id}>
+                      {u.username}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            ) : (
+              <div className="flex h-8 items-center rounded-md border px-3">
+                <span className="text-sm">
+                  {users.find((u) => u.id === (assigneeId === "none" ? null : assigneeId))?.username ?? "Unassigned"}
+                </span>
+              </div>
+            )}
           </div>
 
           <Separator />

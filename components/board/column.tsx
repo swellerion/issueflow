@@ -18,13 +18,14 @@ type ColumnProps = {
   name: string;
   color: string;
   issues: Issue[];
+  canEdit: boolean;
 };
 
-export function Column({ id, name, color, issues }: ColumnProps) {
+export function Column({ id, name, color, issues, canEdit }: ColumnProps) {
   const { setNodeRef, isOver } = useDroppable({ id });
 
   return (
-    <div className="flex w-72 shrink-0 flex-col gap-3">
+    <div className="flex w-72 shrink-0 flex-col gap-3" data-testid={`column-${name.toLowerCase().replace(/\s+/g, "-")}`}>
       <div className="flex items-center justify-between px-1">
         <div className="flex items-center gap-2">
           <span
@@ -45,12 +46,13 @@ export function Column({ id, name, color, issues }: ColumnProps) {
 
       <div
         ref={setNodeRef}
+        data-testid={`column-drop-${name.toLowerCase().replace(/\s+/g, "-")}`}
         className={`flex flex-col gap-2 min-h-24 rounded-lg p-1 transition-colors
           ${isOver ? "bg-primary/5 ring-1 ring-primary/20" : ""}
         `}
       >
         {issues.map((issue) => (
-          <IssueCard key={issue.id} {...issue} />
+          <IssueCard key={issue.id} {...issue} canEdit={canEdit} />
         ))}
       </div>
     </div>

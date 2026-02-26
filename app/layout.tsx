@@ -1,16 +1,24 @@
 import type { Metadata } from "next";
-import { Geist, Geist_Mono } from "next/font/google";
+import { Open_Sans, Overpass, Overpass_Mono } from "next/font/google";
 import "./globals.css";
 import { Providers } from "@/components/providers";
 
-const geistSans = Geist({
-  variable: "--font-geist-sans",
+const openSans = Open_Sans({
+  variable: "--font-open-sans",
   subsets: ["latin"],
+  weight: ["400", "600", "700"],
 });
 
-const geistMono = Geist_Mono({
-  variable: "--font-geist-mono",
+const overpass = Overpass({
+  variable: "--font-overpass",
   subsets: ["latin"],
+  weight: ["400", "600", "700"],
+});
+
+const overpassMono = Overpass_Mono({
+  variable: "--font-overpass-mono",
+  subsets: ["latin"],
+  weight: ["400", "600"],
 });
 
 export const metadata: Metadata = {
@@ -24,9 +32,10 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="en">
+    <html lang="en" suppressHydrationWarning>
       <body
-        className={`${geistSans.variable} ${geistMono.variable} antialiased`}
+        className={`${openSans.variable} ${overpass.variable} ${overpassMono.variable} antialiased`}
+        suppressHydrationWarning
       >
         <Providers>{children}</Providers>
       </body>

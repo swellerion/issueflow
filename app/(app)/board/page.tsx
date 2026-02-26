@@ -1,17 +1,31 @@
 import { redirect } from "next/navigation";
-import { getProjects } from "@/lib/services/projects.service";
+import { auth } from "@/lib/auth";
+import { getProjects, getMembership } from "@/lib/services/projects.service";
 import { getProjectBoard } from "@/lib/services/issues.service";
+import { getUserFlags } from "@/lib/services/users.service";
+import { canEditIssue } from "@/lib/permissions";
 import { Board } from "@/components/board/board";
 
 export default async function BoardPage() {
-  const projects = await getProjects();
+  const session = await auth();
+  if (!session?.user?.id) redirect("/login");
+
+  const userFlags = await getUserFlags(session.user.id);
+  const isSuperAdmin = userFlags?.isSuperAdmin ?? false;
+
+  const projects = await getProjects(session.user.id, isSuperAdmin);
 
   if (projects.length === 0) {
     redirect("/projects/new");
   }
 
   const project = projects[0];
-  const { issues } = await getProjectBoard(project.id);
+  const [{ issues }, membership] = await Promise.all([
+    getProjectBoard(project.id),
+    getMembership(project.id, session.user.id),
+  ]);
+
+  const canEdit = canEditIssue(membership?.role ?? null, isSuperAdmin);
 
   return (
     <div>
@@ -21,7 +35,7 @@ export default async function BoardPage() {
           {project.slug.toUpperCase()} · {issues.length} issue{issues.length !== 1 ? "s" : ""}
         </p>
       </div>
-      <Board statuses={project.statuses} issues={issues} />
+      <Board statuses={project.statuses} issues={issues} canEdit={canEdit} />
     </div>
   );
 }

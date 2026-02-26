@@ -44,8 +44,22 @@ export async function registerUser(input: RegisterInput): Promise<SafeUser> {
 
 export async function getUsers() {
   return db.user.findMany({
-    select: { id: true, username: true },
+    select: { id: true, username: true, isSuperAdmin: true },
     orderBy: { username: "asc" },
+  });
+}
+
+export async function getUserByUsername(username: string) {
+  return db.user.findUnique({
+    where: { username },
+    select: { id: true, username: true, isSuperAdmin: true },
+  });
+}
+
+export async function getUserFlags(userId: string) {
+  return db.user.findUnique({
+    where: { id: userId },
+    select: { isSuperAdmin: true },
   });
 }
 
