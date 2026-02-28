@@ -4,6 +4,7 @@
   "private": true,
   "scripts": {
     "dev": "next dev --port 3001",
+    "dev:e2e": "NEXT_E2E=1 next dev --port 3002",
     "build": "next build",
     "start": "next start --port 3001",
     "lint": "eslint",

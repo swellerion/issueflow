@@ -1,6 +1,10 @@
 import { NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { createComment } from "@/lib/services/comments.service";
+import { getIssueById } from "@/lib/services/issues.service";
+import { getMembership } from "@/lib/services/projects.service";
+import { getUserFlags } from "@/lib/services/users.service";
+import { canEditIssue } from "@/lib/permissions";
 
 export async function POST(
   request: Request,
@@ -12,6 +16,19 @@ export async function POST(
   }
 
   const { id: issueId } = await params;
+
+  const issue = await getIssueById(issueId);
+  if (!issue) {
+    return NextResponse.json({ error: "Issue not found." }, { status: 404 });
+  }
+
+  const [membership, userFlags] = await Promise.all([
+    getMembership(issue.project.id, session.user.id),
+    getUserFlags(session.user.id),
+  ]);
+  if (!canEditIssue(membership?.role ?? null, userFlags?.isSuperAdmin ?? false)) {
+    return NextResponse.json({ error: "Forbidden." }, { status: 403 });
+  }
 
   let body: unknown;
   try {

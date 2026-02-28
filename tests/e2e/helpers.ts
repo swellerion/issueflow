@@ -39,10 +39,11 @@ export async function createProject(
 
 export async function addMemberToProject(
   page: Page,
+  slug: string,
   username: string,
   role: "ADMIN" | "MEMBER" | "VIEWER"
 ): Promise<void> {
-  await page.goto("/settings/members");
+  await page.goto(`/${slug}/settings/members`);
   await page.getByTestId("add-member-username").fill(username);
   // Select role
   await page.getByTestId("add-member-role").click();

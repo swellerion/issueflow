@@ -1,4 +1,5 @@
 import { db } from "@/lib/db";
+import { LinkType } from "@/app/generated/prisma/enums";
 
 const safeUserSelect = {
   id: true,
@@ -9,6 +10,7 @@ export type CreateIssueInput = {
   title: string;
   description?: string;
   statusId: string;
+  issueTypeId?: string;
   projectId: string;
   authorId: string;
   assigneeId?: string;
@@ -16,6 +18,7 @@ export type CreateIssueInput = {
 
 export type UpdateIssueInput = {
   statusId?: string;
+  issueTypeId?: string;
   assigneeId?: string | null;
   title?: string;
   description?: string;
@@ -46,6 +49,7 @@ export async function createIssue(input: CreateIssueInput) {
         title,
         description: input.description?.trim() || null,
         statusId: input.statusId,
+        issueTypeId: input.issueTypeId ?? null,
         projectId: input.projectId,
         authorId: input.authorId,
         assigneeId: input.assigneeId ?? null,
@@ -53,6 +57,7 @@ export async function createIssue(input: CreateIssueInput) {
       },
       include: {
         status: true,
+        issueType: true,
         author: { select: safeUserSelect },
         assignee: { select: safeUserSelect },
       },
@@ -71,11 +76,35 @@ export async function getIssueById(id: string) {
         include: { author: { select: safeUserSelect } },
         orderBy: { createdAt: "asc" },
       },
+      issueType: true,
       project: {
-        include: { statuses: { orderBy: { position: "asc" } } },
+        include: {
+          statuses: { orderBy: { position: "asc" } },
+          issueTypes: { orderBy: { position: "asc" } },
+        },
+      },
+      linksFrom: {
+        include: {
+          toIssue: { select: { id: true, identifier: true, title: true, status: { select: { name: true, color: true } } } },
+        },
+        orderBy: { createdAt: "asc" },
+      },
+      linksTo: {
+        include: {
+          fromIssue: { select: { id: true, identifier: true, title: true, status: { select: { name: true, color: true } } } },
+        },
+        orderBy: { createdAt: "asc" },
       },
     },
   });
+}
+
+export async function addIssueLink(fromIssueId: string, toIssueId: string, type: LinkType) {
+  return db.issueLink.create({ data: { fromIssueId, toIssueId, type } });
+}
+
+export async function deleteIssueLink(linkId: string) {
+  return db.issueLink.delete({ where: { id: linkId } });
 }
 
 export async function updateIssue(id: string, input: UpdateIssueInput) {
@@ -83,12 +112,14 @@ export async function updateIssue(id: string, input: UpdateIssueInput) {
     where: { id },
     data: {
       ...(input.statusId !== undefined && { statusId: input.statusId }),
+      ...(input.issueTypeId !== undefined && { issueTypeId: input.issueTypeId }),
       ...(input.assigneeId !== undefined && { assigneeId: input.assigneeId }),
       ...(input.title !== undefined && { title: input.title.trim() }),
       ...(input.description !== undefined && { description: input.description.trim() || null }),
     },
     include: {
       status: true,
+      issueType: true,
       author: { select: safeUserSelect },
       assignee: { select: safeUserSelect },
     },
@@ -107,6 +138,8 @@ export async function getProjectBoard(projectId: string) {
         author: { select: safeUserSelect },
         assignee: { select: safeUserSelect },
         status: true,
+        issueType: true,
+        linksTo: { where: { type: LinkType.BLOCKS }, select: { id: true } },
       },
       orderBy: { position: "asc" },
     }),

@@ -60,13 +60,14 @@ test.describe("Role-gated editing", () => {
   let issueUrl: string;
   let adminUser: string;
   let viewerUser: string;
+  let slug: string;
   const password = "password123";
 
   test.beforeEach(async ({ page, browser }) => {
     // Create admin user and project + issue
     adminUser = `admin-${uid()}`;
     viewerUser = `viewer-${uid()}`;
-    const slug = `proj-${uid()}`;
+    slug = `proj-${uid()}`;
 
     await registerAndLogin(page, adminUser, password);
     await createProject(page, "RBAC Test Project", slug);
@@ -91,7 +92,7 @@ test.describe("Role-gated editing", () => {
     await viewerContext.close();
 
     // Admin adds viewer to project
-    await addMemberToProject(page, viewerUser, "VIEWER");
+    await addMemberToProject(page, slug, viewerUser, "VIEWER");
   });
 
   test("admin can inline-edit title", async ({ page }) => {

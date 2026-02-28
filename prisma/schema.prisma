@@ -13,6 +13,12 @@ enum ProjectRole {
   VIEWER
 }
 
+enum LinkType {
+  BLOCKS
+  RELATES_TO
+  DUPLICATES
+}
+
 model User {
   id           String   @id @default(cuid())
   username     String   @unique
@@ -36,6 +42,7 @@ model Project {
 
   owner       User                @relation(fields: [ownerId], references: [id])
   statuses    Status[]
+  issueTypes  IssueType[]
   issues      Issue[]
   memberships ProjectMembership[]
 }
@@ -68,6 +75,21 @@ model Status {
   @@unique([projectId, name])
 }
 
+model IssueType {
+  id        String @id @default(cuid())
+  name      String
+  icon      String @default("circle-dot")
+  color     String @default("#6366f1")
+  position  Int
+  projectId String
+
+  project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  issues  Issue[]
+
+  @@unique([projectId, position])
+  @@unique([projectId, name])
+}
+
 model Issue {
   id          String   @id @default(cuid())
   identifier  String   @unique
@@ -77,19 +99,38 @@ model Issue {
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 
-  projectId  String
-  statusId   String
-  authorId   String
-  assigneeId String?
+  projectId   String
+  statusId    String
+  issueTypeId String?
+  authorId    String
+  assigneeId  String?
 
-  project  Project   @relation(fields: [projectId], references: [id], onDelete: Cascade)
-  status   Status    @relation(fields: [statusId], references: [id])
-  author   User      @relation("IssueAuthor", fields: [authorId], references: [id])
-  assignee User?     @relation("IssueAssignee", fields: [assigneeId], references: [id])
-  comments Comment[]
+  project   Project    @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  status    Status     @relation(fields: [statusId], references: [id])
+  issueType IssueType? @relation(fields: [issueTypeId], references: [id], onDelete: SetNull)
+  author    User       @relation("IssueAuthor", fields: [authorId], references: [id])
+  assignee  User?      @relation("IssueAssignee", fields: [assigneeId], references: [id])
+  comments   Comment[]
+  linksFrom  IssueLink[] @relation("LinksFrom")
+  linksTo    IssueLink[] @relation("LinksTo")
 
   @@index([projectId])
   @@index([statusId])
+}
+
+model IssueLink {
+  id          String   @id @default(cuid())
+  fromIssueId String
+  toIssueId   String
+  type        LinkType
+  createdAt   DateTime @default(now())
+
+  fromIssue Issue @relation("LinksFrom", fields: [fromIssueId], references: [id], onDelete: Cascade)
+  toIssue   Issue @relation("LinksTo",   fields: [toIssueId],   references: [id], onDelete: Cascade)
+
+  @@unique([fromIssueId, toIssueId, type])
+  @@index([fromIssueId])
+  @@index([toIssueId])
 }
 
 model Comment {

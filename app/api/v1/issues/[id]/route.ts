@@ -41,7 +41,7 @@ export async function PATCH(
     return NextResponse.json({ error: "Invalid JSON." }, { status: 400 });
   }
 
-  const { statusId, assigneeId, title, description } = body as Record<string, unknown>;
+  const { statusId, issueTypeId, assigneeId, title, description } = body as Record<string, unknown>;
 
   // Fetch issue first so we can check project membership
   const issue = await getIssueById(id);
@@ -65,9 +65,18 @@ export async function PATCH(
     }
   }
 
+  // Validate issueTypeId belongs to the issue's project
+  if (typeof issueTypeId === "string") {
+    const validType = issue.project.issueTypes.find((t) => t.id === issueTypeId);
+    if (!validType) {
+      return NextResponse.json({ error: "Invalid issueTypeId for this project." }, { status: 422 });
+    }
+  }
+
   try {
     const updated = await updateIssue(id, {
       ...(typeof statusId === "string" && { statusId }),
+      ...(typeof issueTypeId === "string" && { issueTypeId }),
       ...(assigneeId === null || typeof assigneeId === "string"
         ? { assigneeId: assigneeId as string | null }
         : {}),

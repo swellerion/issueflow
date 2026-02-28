@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
+import { Bug, CheckSquare2, Sparkles, BookOpen, CircleDot, type LucideProps } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -14,20 +15,34 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 
+const ICON_MAP: Record<string, React.ComponentType<LucideProps>> = {
+  "bug": Bug,
+  "check-square-2": CheckSquare2,
+  "sparkles": Sparkles,
+  "book-open": BookOpen,
+  "circle-dot": CircleDot,
+};
+
 type Status = { id: string; name: string; color: string };
+type IssueType = { id: string; name: string; icon: string; color: string };
 type User = { id: string; username: string };
 
 type Props = {
   statuses: Status[];
   defaultStatusId: string;
+  issueTypes: IssueType[];
+  defaultIssueTypeId: string;
   users: User[];
+  projectId: string;
+  slug: string;
 };
 
-export function NewIssueForm({ statuses, defaultStatusId, users }: Props) {
+export function NewIssueForm({ statuses, defaultStatusId, issueTypes, defaultIssueTypeId, users, projectId, slug }: Props) {
   const router = useRouter();
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [statusId, setStatusId] = useState(defaultStatusId);
+  const [issueTypeId, setIssueTypeId] = useState(defaultIssueTypeId);
   const [assigneeId, setAssigneeId] = useState<string>("none");
 
   async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
@@ -46,7 +61,9 @@ export function NewIssueForm({ statuses, defaultStatusId, users }: Props) {
         title,
         description: description || undefined,
         statusId,
+        issueTypeId: issueTypeId || undefined,
         assigneeId: assigneeId === "none" ? undefined : assigneeId,
+        projectId,
       }),
     });
 
@@ -58,7 +75,7 @@ export function NewIssueForm({ statuses, defaultStatusId, users }: Props) {
       return;
     }
 
-    router.push(`/issues/${data.id}`);
+    router.push(`/${slug}/issues/${data.id}`);
     router.refresh();
   }
 
@@ -89,7 +106,29 @@ export function NewIssueForm({ statuses, defaultStatusId, users }: Props) {
         />
       </div>
 
-      <div className="grid grid-cols-2 gap-4">
+      <div className="grid grid-cols-3 gap-4">
+        <div className="space-y-2">
+          <Label>Type</Label>
+          <Select value={issueTypeId} onValueChange={setIssueTypeId} disabled={loading}>
+            <SelectTrigger>
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              {issueTypes.map((t) => {
+                const Icon = ICON_MAP[t.icon] ?? CircleDot;
+                return (
+                  <SelectItem key={t.id} value={t.id}>
+                    <span className="flex items-center gap-2">
+                      <Icon className="h-4 w-4" style={{ color: t.color }} />
+                      {t.name}
+                    </span>
+                  </SelectItem>
+                );
+              })}
+            </SelectContent>
+          </Select>
+        </div>
+
         <div className="space-y-2">
           <Label>Status</Label>
           <Select value={statusId} onValueChange={setStatusId} disabled={loading}>

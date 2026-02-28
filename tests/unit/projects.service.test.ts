@@ -13,6 +13,7 @@ vi.mock("@/lib/db", async () => ({
       create: vi.fn(),
       update: vi.fn(),
       delete: vi.fn(),
+      count: vi.fn(),
     },
     user: {
       update: vi.fn(),
@@ -43,6 +44,7 @@ const mockMembershipFindMany = vi.mocked(db.projectMembership.findMany);
 const mockMembershipCreate = vi.mocked(db.projectMembership.create);
 const mockMembershipUpdate = vi.mocked(db.projectMembership.update);
 const mockMembershipDelete = vi.mocked(db.projectMembership.delete);
+const mockMembershipCount = vi.mocked(db.projectMembership.count);
 const mockUserUpdate = vi.mocked(db.user.update);
 
 beforeEach(() => vi.clearAllMocks());
@@ -56,6 +58,7 @@ describe("createProject", () => {
       createdAt: new Date(),
       ownerId: "user1",
       statuses: [],
+      issueTypes: [],
     };
     mockTransaction.mockImplementation(async (fn) => {
       const tx = {
@@ -72,7 +75,7 @@ describe("createProject", () => {
 
   it("normalises slug to lowercase", async () => {
     const projectResult = {
-      id: "proj1", name: "Test", slug: "test", createdAt: new Date(), ownerId: "user1", statuses: [],
+      id: "proj1", name: "Test", slug: "test", createdAt: new Date(), ownerId: "user1", statuses: [], issueTypes: [],
     };
     let capturedCreate: unknown;
     mockTransaction.mockImplementation(async (fn) => {
@@ -89,6 +92,31 @@ describe("createProject", () => {
     await createProject({ name: "Test", slug: "TEST", userId: "user1" });
     const call = capturedCreate as { data: { slug: string } };
     expect(call.data.slug).toBe("test");
+  });
+
+  it("seeds 4 default issue types alongside 4 default statuses", async () => {
+    const projectResult = {
+      id: "proj1", name: "My Project", slug: "my-project", createdAt: new Date(), ownerId: "user1",
+      statuses: [], issueTypes: [],
+    };
+    let capturedCreate: unknown;
+    mockTransaction.mockImplementation(async (fn) => {
+      const tx = {
+        project: {
+          findUnique: vi.fn().mockResolvedValue(null),
+          create: vi.fn().mockImplementation((args: unknown) => { capturedCreate = args; return projectResult; }),
+        },
+        projectMembership: { create: vi.fn().mockResolvedValue({}) },
+      };
+      return fn(tx as never);
+    });
+
+    await createProject({ name: "My Project", slug: "my-project", userId: "user1" });
+    const call = capturedCreate as { data: { statuses: { create: unknown[] }; issueTypes: { create: unknown[] } } };
+    expect(call.data.statuses.create).toHaveLength(4);
+    expect(call.data.issueTypes.create).toHaveLength(4);
+    const typeNames = (call.data.issueTypes.create as Array<{ name: string }>).map((t) => t.name);
+    expect(typeNames).toEqual(["Task", "Bug", "Feature", "Story"]);
   });
 
   it("rejects project name shorter than 2 characters", async () => {
@@ -195,23 +223,69 @@ describe("addMember", () => {
 });
 
 describe("updateMemberRole", () => {
-  it("updates the role of an existing member", async () => {
+  it("updates a non-admin role without checking count", async () => {
+    mockMembershipFindUnique.mockResolvedValue({ role: ProjectRole.MEMBER } as never);
     mockMembershipUpdate.mockResolvedValue({ id: "m1", role: ProjectRole.VIEWER } as never);
     await updateMemberRole("proj1", "u1", ProjectRole.VIEWER);
     expect(mockMembershipUpdate).toHaveBeenCalledWith({
       where: { projectId_userId: { projectId: "proj1", userId: "u1" } },
       data: { role: ProjectRole.VIEWER },
     });
+    expect(mockMembershipCount).not.toHaveBeenCalled();
+  });
+
+  it("allows downgrading an admin when other admins exist", async () => {
+    mockMembershipFindUnique.mockResolvedValue({ role: ProjectRole.ADMIN } as never);
+    mockMembershipCount.mockResolvedValue(2 as never);
+    mockMembershipUpdate.mockResolvedValue({ id: "m1", role: ProjectRole.MEMBER } as never);
+    await updateMemberRole("proj1", "u1", ProjectRole.MEMBER);
+    expect(mockMembershipUpdate).toHaveBeenCalled();
+  });
+
+  it("throws when downgrading the last admin", async () => {
+    mockMembershipFindUnique.mockResolvedValue({ role: ProjectRole.ADMIN } as never);
+    mockMembershipCount.mockResolvedValue(1 as never);
+    await expect(updateMemberRole("proj1", "u1", ProjectRole.MEMBER)).rejects.toThrow(
+      "Cannot remove the last admin from a project."
+    );
+    expect(mockMembershipUpdate).not.toHaveBeenCalled();
+  });
+
+  it("skips count check when promoting to admin", async () => {
+    mockMembershipUpdate.mockResolvedValue({ id: "m1", role: ProjectRole.ADMIN } as never);
+    await updateMemberRole("proj1", "u1", ProjectRole.ADMIN);
+    expect(mockMembershipFindUnique).not.toHaveBeenCalled();
+    expect(mockMembershipCount).not.toHaveBeenCalled();
+    expect(mockMembershipUpdate).toHaveBeenCalled();
   });
 });
 
 describe("removeMember", () => {
-  it("deletes a membership", async () => {
+  it("deletes a non-admin membership without checking count", async () => {
+    mockMembershipFindUnique.mockResolvedValue({ role: ProjectRole.MEMBER } as never);
     mockMembershipDelete.mockResolvedValue({ id: "m1" } as never);
     await removeMember("proj1", "u1");
     expect(mockMembershipDelete).toHaveBeenCalledWith({
       where: { projectId_userId: { projectId: "proj1", userId: "u1" } },
     });
+    expect(mockMembershipCount).not.toHaveBeenCalled();
+  });
+
+  it("allows removing an admin when other admins exist", async () => {
+    mockMembershipFindUnique.mockResolvedValue({ role: ProjectRole.ADMIN } as never);
+    mockMembershipCount.mockResolvedValue(2 as never);
+    mockMembershipDelete.mockResolvedValue({ id: "m1" } as never);
+    await removeMember("proj1", "u1");
+    expect(mockMembershipDelete).toHaveBeenCalled();
+  });
+
+  it("throws when removing the last admin", async () => {
+    mockMembershipFindUnique.mockResolvedValue({ role: ProjectRole.ADMIN } as never);
+    mockMembershipCount.mockResolvedValue(1 as never);
+    await expect(removeMember("proj1", "u1")).rejects.toThrow(
+      "Cannot remove the last admin from a project."
+    );
+    expect(mockMembershipDelete).not.toHaveBeenCalled();
   });
 });
 

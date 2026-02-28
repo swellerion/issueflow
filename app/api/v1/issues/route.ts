@@ -1,7 +1,9 @@
 import { NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { createIssue } from "@/lib/services/issues.service";
-import { getProjects } from "@/lib/services/projects.service";
+import { getProjectById, getMembership } from "@/lib/services/projects.service";
+import { getUserFlags } from "@/lib/services/users.service";
+import { canEditIssue } from "@/lib/permissions";
 
 export async function POST(request: Request) {
   const session = await auth();
@@ -16,21 +18,37 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Invalid JSON." }, { status: 400 });
   }
 
-  const { title, description, statusId, assigneeId } = body as Record<string, unknown>;
+  const { title, description, statusId, issueTypeId, assigneeId, projectId } = body as Record<string, unknown>;
 
-  if (typeof title !== "string" || typeof statusId !== "string") {
-    return NextResponse.json({ error: "title and statusId are required." }, { status: 400 });
+  if (typeof title !== "string" || typeof statusId !== "string" || typeof projectId !== "string") {
+    return NextResponse.json({ error: "title, statusId, and projectId are required." }, { status: 400 });
   }
 
-  const projects = await getProjects(session.user.id);
-  if (projects.length === 0) {
-    return NextResponse.json({ error: "No project found." }, { status: 404 });
+  const [project, membership, userFlags] = await Promise.all([
+    getProjectById(projectId),
+    getMembership(projectId, session.user.id),
+    getUserFlags(session.user.id),
+  ]);
+
+  if (!project) {
+    return NextResponse.json({ error: "Project not found." }, { status: 404 });
   }
 
-  const project = projects[0];
+  const isSuperAdmin = userFlags?.isSuperAdmin ?? false;
+  if (!canEditIssue(membership?.role ?? null, isSuperAdmin)) {
+    return NextResponse.json({ error: "Forbidden." }, { status: 403 });
+  }
+
   const validStatus = project.statuses.find((s) => s.id === statusId);
   if (!validStatus) {
     return NextResponse.json({ error: "Invalid statusId." }, { status: 422 });
+  }
+
+  if (typeof issueTypeId === "string") {
+    const validType = project.issueTypes.find((t) => t.id === issueTypeId);
+    if (!validType) {
+      return NextResponse.json({ error: "Invalid issueTypeId." }, { status: 422 });
+    }
   }
 
   try {
@@ -38,7 +56,8 @@ export async function POST(request: Request) {
       title,
       description: typeof description === "string" ? description : undefined,
       statusId,
-      projectId: project.id,
+      issueTypeId: typeof issueTypeId === "string" ? issueTypeId : undefined,
+      projectId,
       authorId: session.user.id,
       assigneeId: typeof assigneeId === "string" ? assigneeId : undefined,
     });

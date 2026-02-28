@@ -16,14 +16,14 @@ vi.mock("@/lib/db", async () => ({
 }));
 
 import { db } from "@/lib/db";
-import { createIssue } from "@/lib/services/issues.service";
+import { createIssue, updateIssue } from "@/lib/services/issues.service";
 
 const mockTransaction = vi.mocked(db.$transaction);
 
 beforeEach(() => vi.clearAllMocks());
 
 describe("createIssue", () => {
-  function setupTransaction() {
+  function setupTransaction(issueTypeId?: string) {
     mockTransaction.mockImplementation(async (fn) => {
       const tx = {
         project: { findUnique: vi.fn().mockResolvedValue({ slug: "isf" }) },
@@ -35,6 +35,7 @@ describe("createIssue", () => {
             title: "Test issue",
             description: null,
             statusId: "status1",
+            issueTypeId: issueTypeId ?? null,
             projectId: "proj1",
             authorId: "user1",
             assigneeId: null,
@@ -42,6 +43,7 @@ describe("createIssue", () => {
             createdAt: new Date(),
             updatedAt: new Date(),
             status: { id: "status1", name: "Backlog", color: "#94a3b8", position: 0 },
+            issueType: issueTypeId ? { id: issueTypeId, name: "Task", icon: "check-square-2", color: "#6366f1" } : null,
             author: { id: "user1", username: "alice" },
             assignee: null,
           }),
@@ -103,5 +105,62 @@ describe("createIssue", () => {
       })
     ).rejects.toThrow("Issue title must be 255 characters or fewer.");
     expect(mockTransaction).not.toHaveBeenCalled();
+  });
+
+  it("passes issueTypeId through to tx.issue.create", async () => {
+    setupTransaction("type1");
+    let capturedCreate: unknown;
+    mockTransaction.mockImplementation(async (fn) => {
+      const tx = {
+        project: { findUnique: vi.fn().mockResolvedValue({ slug: "isf" }) },
+        issue: {
+          count: vi.fn().mockResolvedValue(0),
+          create: vi.fn().mockImplementation((args: unknown) => {
+            capturedCreate = args;
+            return { id: "issue1", identifier: "ISF-1", issueTypeId: "type1" };
+          }),
+        },
+      };
+      return fn(tx as never);
+    });
+
+    await createIssue({
+      title: "Typed issue",
+      statusId: "status1",
+      issueTypeId: "type1",
+      projectId: "proj1",
+      authorId: "user1",
+    });
+
+    const call = capturedCreate as { data: { issueTypeId: string } };
+    expect(call.data.issueTypeId).toBe("type1");
+  });
+});
+
+describe("updateIssue", () => {
+  const mockUpdate = vi.mocked(db.issue.update);
+
+  it("spreads issueTypeId when provided", async () => {
+    mockUpdate.mockResolvedValue({
+      id: "issue1",
+      issueTypeId: "type1",
+    } as never);
+
+    await updateIssue("issue1", { issueTypeId: "type1" });
+
+    expect(mockUpdate).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({ issueTypeId: "type1" }),
+      })
+    );
+  });
+
+  it("does not include issueTypeId when not provided", async () => {
+    mockUpdate.mockResolvedValue({ id: "issue1" } as never);
+
+    await updateIssue("issue1", { statusId: "status1" });
+
+    const call = mockUpdate.mock.calls[0][0] as { data: Record<string, unknown> };
+    expect("issueTypeId" in call.data).toBe(false);
   });
 });

@@ -3,7 +3,15 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
-import { ArrowLeft } from "lucide-react";
+import { ArrowLeft, Plus, Bug, CheckSquare2, Sparkles, BookOpen, CircleDot, X, type LucideProps } from "lucide-react";
+
+const ICON_MAP: Record<string, React.ComponentType<LucideProps>> = {
+  "bug": Bug,
+  "check-square-2": CheckSquare2,
+  "sparkles": Sparkles,
+  "book-open": BookOpen,
+  "circle-dot": CircleDot,
+};
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -20,11 +28,15 @@ import {
 
 type User = { id: string; username: string };
 type Status = { id: string; name: string; color: string; position: number };
-type Comment = {
-  id: string;
-  body: string;
-  createdAt: Date | string;
-  author: User;
+type IssueType = { id: string; name: string; icon: string; color: string };
+type Comment = { id: string; body: string; createdAt: Date | string; author: User };
+type LinkedIssueRef = { id: string; identifier: string; title: string; status: { name: string; color: string } };
+type ProjectIssue = { id: string; identifier: string; title: string };
+
+const LINK_LABELS: Record<string, string> = {
+  BLOCKS: "blocks",
+  RELATES_TO: "relates to",
+  DUPLICATES: "duplicates",
 };
 
 type Issue = {
@@ -34,17 +46,23 @@ type Issue = {
   description: string | null;
   createdAt: Date | string;
   statusId: string;
+  issueTypeId: string | null;
   status: Status;
+  issueType: IssueType | null;
   author: User;
   assignee: User | null;
   comments: Comment[];
-  project: { id: string; name: string; statuses: Status[] };
+  project: { id: string; name: string; statuses: Status[]; issueTypes: IssueType[] };
+  linksFrom: { id: string; type: string; toIssue: LinkedIssueRef }[];
+  linksTo:   { id: string; type: string; fromIssue: LinkedIssueRef }[];
 };
 
 type Props = {
   issue: Issue;
   users: User[];
   canEdit: boolean;
+  projectIssues: ProjectIssue[];
+  slug: string;
 };
 
 function formatDate(value: Date | string) {
@@ -55,9 +73,10 @@ function formatDate(value: Date | string) {
   });
 }
 
-export function IssueDetail({ issue, users, canEdit }: Props) {
+export function IssueDetail({ issue, users, canEdit, projectIssues, slug }: Props) {
   const router = useRouter();
   const [statusId, setStatusId] = useState(issue.statusId);
+  const [issueTypeId, setIssueTypeId] = useState(issue.issueType?.id ?? "none");
   const [assigneeId, setAssigneeId] = useState(issue.assignee?.id ?? "none");
   const [commentBody, setCommentBody] = useState("");
   const [submittingComment, setSubmittingComment] = useState(false);
@@ -71,6 +90,28 @@ export function IssueDetail({ issue, users, canEdit }: Props) {
   const [editingDescription, setEditingDescription] = useState(false);
   const [descriptionValue, setDescriptionValue] = useState(issue.description ?? "");
 
+  const [addingLink, setAddingLink] = useState(false);
+  const [linkDirection, setLinkDirection] = useState("BLOCKS");
+  const [linkTarget, setLinkTarget] = useState("");
+
+  async function handleAddLink() {
+    if (!linkTarget) return;
+    await fetch(`/api/v1/issues/${issue.id}/links`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ targetIssueId: linkTarget, direction: linkDirection }),
+    });
+    setAddingLink(false);
+    setLinkDirection("BLOCKS");
+    setLinkTarget("");
+    router.refresh();
+  }
+
+  async function handleRemoveLink(linkId: string) {
+    await fetch(`/api/v1/issues/${issue.id}/links/${linkId}`, { method: "DELETE" });
+    router.refresh();
+  }
+
   async function patchIssue(data: Record<string, unknown>) {
     await fetch(`/api/v1/issues/${issue.id}`, {
       method: "PATCH",
@@ -83,6 +124,11 @@ export function IssueDetail({ issue, users, canEdit }: Props) {
   async function handleStatusChange(newStatusId: string) {
     setStatusId(newStatusId);
     await patchIssue({ statusId: newStatusId });
+  }
+
+  async function handleIssueTypeChange(value: string) {
+    setIssueTypeId(value);
+    await patchIssue({ issueTypeId: value === "none" ? null : value });
   }
 
   async function handleAssigneeChange(value: string) {
@@ -134,11 +180,13 @@ export function IssueDetail({ issue, users, canEdit }: Props) {
 
   const currentStatus =
     issue.project.statuses.find((s) => s.id === statusId) ?? issue.status;
+  const currentIssueType =
+    issue.project.issueTypes.find((t) => t.id === issueTypeId) ?? issue.issueType;
 
   return (
     <div className="max-w-5xl mx-auto space-y-6">
       <Link
-        href="/board"
+        href={`/${slug}/board`}
         className="inline-flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground transition-colors"
       >
         <ArrowLeft className="h-4 w-4" />
@@ -329,6 +377,47 @@ export function IssueDetail({ issue, users, canEdit }: Props) {
 
           <div className="space-y-1.5">
             <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
+              Type
+            </p>
+            {canEdit ? (
+              <Select value={issueTypeId} onValueChange={handleIssueTypeChange}>
+                <SelectTrigger className="h-8">
+                  <SelectValue placeholder="No type" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="none">No type</SelectItem>
+                  {issue.project.issueTypes.map((t) => {
+                    const Icon = ICON_MAP[t.icon] ?? CircleDot;
+                    return (
+                      <SelectItem key={t.id} value={t.id}>
+                        <span className="flex items-center gap-2">
+                          <Icon className="h-4 w-4" style={{ color: t.color }} />
+                          {t.name}
+                        </span>
+                      </SelectItem>
+                    );
+                  })}
+                </SelectContent>
+              </Select>
+            ) : (
+              <div className="flex h-8 items-center gap-2 rounded-md border px-3">
+                {currentIssueType ? (
+                  <>
+                    {(() => {
+                      const Icon = ICON_MAP[currentIssueType.icon] ?? CircleDot;
+                      return <Icon className="h-4 w-4 shrink-0" style={{ color: currentIssueType.color }} />;
+                    })()}
+                    <span className="text-sm">{currentIssueType.name}</span>
+                  </>
+                ) : (
+                  <span className="text-sm text-muted-foreground">No type</span>
+                )}
+              </div>
+            )}
+          </div>
+
+          <div className="space-y-1.5">
+            <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
               Assignee
             </p>
             {canEdit ? (
@@ -351,6 +440,112 @@ export function IssueDetail({ issue, users, canEdit }: Props) {
                   {users.find((u) => u.id === (assigneeId === "none" ? null : assigneeId))?.username ?? "Unassigned"}
                 </span>
               </div>
+            )}
+          </div>
+
+          <Separator />
+
+          {/* Linked issues */}
+          <div className="space-y-2">
+            <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
+              Linked issues
+            </p>
+            {[
+              ...issue.linksFrom.map((l) => ({
+                id: l.id,
+                label: LINK_LABELS[l.type] ?? l.type.toLowerCase(),
+                targetId: l.toIssue.id,
+                identifier: l.toIssue.identifier,
+                title: l.toIssue.title,
+                statusColor: l.toIssue.status.color,
+              })),
+              ...issue.linksTo.map((l) => ({
+                id: l.id,
+                label: l.type === "BLOCKS" ? "is blocked by"
+                     : l.type === "DUPLICATES" ? "is duplicated by"
+                     : "relates to",
+                targetId: l.fromIssue.id,
+                identifier: l.fromIssue.identifier,
+                title: l.fromIssue.title,
+                statusColor: l.fromIssue.status.color,
+              })),
+            ].map((link) => (
+              <div key={link.id} className="flex items-start gap-2 text-xs">
+                <span className="text-muted-foreground w-24 shrink-0 pt-0.5 leading-tight">
+                  {link.label}
+                </span>
+                <Link href={`/${slug}/board?issueId=${link.targetId}`} className="flex-1 min-w-0 hover:underline">
+                  <span
+                    className="font-mono text-[10px] px-1 rounded border"
+                    style={{ borderColor: link.statusColor, color: link.statusColor }}
+                  >
+                    {link.identifier}
+                  </span>{" "}
+                  <span className="text-foreground">{link.title}</span>
+                </Link>
+                {canEdit && (
+                  <button
+                    onClick={() => handleRemoveLink(link.id)}
+                    className="shrink-0 text-muted-foreground hover:text-destructive transition-colors mt-0.5"
+                    aria-label="Remove link"
+                  >
+                    <X className="h-3 w-3" />
+                  </button>
+                )}
+              </div>
+            ))}
+
+            {canEdit && (
+              addingLink ? (
+                <div className="space-y-2 pt-1">
+                  <div className="flex gap-1.5">
+                    <Select value={linkDirection} onValueChange={setLinkDirection}>
+                      <SelectTrigger className="h-7 text-xs w-36 px-2">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="BLOCKS">blocks</SelectItem>
+                        <SelectItem value="IS_BLOCKED_BY">is blocked by</SelectItem>
+                        <SelectItem value="RELATES_TO">relates to</SelectItem>
+                        <SelectItem value="DUPLICATES">duplicates</SelectItem>
+                      </SelectContent>
+                    </Select>
+                    <Select value={linkTarget} onValueChange={setLinkTarget}>
+                      <SelectTrigger className="h-7 text-xs flex-1 px-2">
+                        <SelectValue placeholder="Select issue…" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {projectIssues.filter((i) => i.id !== issue.id).map((i) => (
+                          <SelectItem key={i.id} value={i.id}>
+                            <span className="font-mono text-muted-foreground">{i.identifier}</span>
+                            {" "}{i.title}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div className="flex gap-1.5">
+                    <Button size="sm" className="h-7 text-xs" onClick={handleAddLink} disabled={!linkTarget}>
+                      Add
+                    </Button>
+                    <Button size="sm" variant="ghost" className="h-7 text-xs" onClick={() => { setAddingLink(false); setLinkDirection("BLOCKS"); setLinkTarget(""); }}>
+                      Cancel
+                    </Button>
+                  </div>
+                </div>
+              ) : (
+                <button
+                  onClick={() => setAddingLink(true)}
+                  className="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground transition-colors"
+                >
+                  <Plus className="h-3 w-3" />
+                  Add link
+                </button>
+              )
+            )}
+
+            {issue.linksFrom.length === 0 && issue.linksTo.length === 0 && !addingLink && (
+              <p className="text-xs text-muted-foreground">None</p>
             )}
           </div>
 
