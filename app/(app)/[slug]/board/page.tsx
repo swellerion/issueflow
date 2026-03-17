@@ -24,7 +24,7 @@ export default async function BoardPage({ params, searchParams }: Props) {
 
   const { issueId } = await searchParams;
 
-  const [{ issues }, membership] = await Promise.all([
+  const [{ project: boardProject, issues }, membership] = await Promise.all([
     getProjectBoard(project.id),
     getMembership(project.id, session.user.id),
   ]);
@@ -44,8 +44,17 @@ export default async function BoardPage({ params, searchParams }: Props) {
     }
   }
 
+  // Build allowed transitions map when a workflow is adopted
+  const allowedTransitions: Record<string, string[]> | null =
+    boardProject?.workflowId && boardProject.statusTransitions.length > 0
+      ? boardProject.statusTransitions.reduce<Record<string, string[]>>((acc, t) => {
+          (acc[t.fromStatusId] ??= []).push(t.toStatusId);
+          return acc;
+        }, {})
+      : null;
+
   return (
-    <div className="flex flex-col h-[calc(100vh-3.5rem-3rem)]">
+    <div className="flex flex-col flex-1 min-h-0 p-6">
       <div className="shrink-0 mb-5">
         <h1 className="text-xl font-semibold">{project.name}</h1>
         <p className="text-sm text-muted-foreground">
@@ -59,6 +68,7 @@ export default async function BoardPage({ params, searchParams }: Props) {
         selectedIssue={selectedIssue}
         users={users}
         slug={slug}
+        allowedTransitions={allowedTransitions}
       />
     </div>
   );

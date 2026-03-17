@@ -1,15 +1,13 @@
 import { notFound, redirect } from "next/navigation";
 import { auth } from "@/lib/auth";
 import { getUserFlags } from "@/lib/services/users.service";
-import { getProjectBySlug, getMembership, getMembers } from "@/lib/services/projects.service";
+import { getProjectBySlug, getMembership } from "@/lib/services/projects.service";
 import { canManageMembers } from "@/lib/permissions";
-import { MembersForm } from "@/components/settings/members-form";
+import { StatusesForm } from "@/components/settings/statuses-form";
 
-type Props = {
-  params: Promise<{ slug: string }>;
-};
+type Props = { params: Promise<{ slug: string }> };
 
-export default async function MembersSettingsPage({ params }: Props) {
+export default async function StatusesSettingsPage({ params }: Props) {
   const { slug } = await params;
   const session = await auth();
   if (!session?.user?.id) redirect("/login");
@@ -21,18 +19,9 @@ export default async function MembersSettingsPage({ params }: Props) {
   if (!project) notFound();
 
   const membership = await getMembership(project.id, session.user.id);
-
   if (!canManageMembers(membership?.role ?? null, isSuperAdmin)) {
     redirect(`/${slug}/board`);
   }
 
-  const members = await getMembers(project.id);
-
-  return (
-    <MembersForm
-      projectId={project.id}
-      members={members}
-      currentUserId={session.user.id}
-    />
-  );
+  return <StatusesForm projectId={project.id} initialStatuses={project.statuses} />;
 }

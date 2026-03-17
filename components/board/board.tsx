@@ -10,16 +10,22 @@ import {
   useSensors,
   type DragStartEvent,
   type DragEndEvent,
+  type DragOverEvent,
 } from "@dnd-kit/core";
-import { Column } from "@/components/board/column";
+import { CategoryColumn } from "@/components/board/category-column";
 import { IssueCard } from "@/components/board/issue-card";
 import { IssuePanel, type PanelIssue } from "@/components/board/issue-panel";
+
+import { type StatusCategory } from "@/lib/status-category";
+
+const CATEGORY_ORDER = ["TODO", "IN_PROGRESS", "DONE"] as const;
 
 type Status = {
   id: string;
   name: string;
   color: string;
   position: number;
+  category: StatusCategory;
 };
 
 type Issue = {
@@ -34,6 +40,9 @@ type Issue = {
 
 type User = { id: string; username: string };
 
+// null means no workflow → all transitions allowed
+type AllowedTransitions = Record<string, string[]> | null;
+
 type BoardProps = {
   statuses: Status[];
   issues: Issue[];
@@ -41,6 +50,7 @@ type BoardProps = {
   selectedIssue: PanelIssue | null;
   users: User[];
   slug: string;
+  allowedTransitions: AllowedTransitions;
 };
 
 export function Board({
@@ -50,9 +60,11 @@ export function Board({
   selectedIssue,
   users,
   slug,
+  allowedTransitions,
 }: BoardProps) {
   const [issues, setIssues] = useState<Issue[]>(initialIssues);
   const [activeIssue, setActiveIssue] = useState<Issue | null>(null);
+  const [dragOverStatusId, setDragOverStatusId] = useState<string | null>(null);
 
   // Keep board cards in sync when the panel edits an issue (router.refresh())
   useEffect(() => {
@@ -66,6 +78,14 @@ export function Board({
     useSensor(PointerSensor, { activationConstraint: { distance: 8 } })
   );
 
+  const isTransitionAllowed = useCallback(
+    (fromStatusId: string, toStatusId: string): boolean => {
+      if (!allowedTransitions) return true;
+      return allowedTransitions[fromStatusId]?.includes(toStatusId) ?? false;
+    },
+    [allowedTransitions]
+  );
+
   const handleDragStart = useCallback(
     ({ active }: DragStartEvent) => {
       const issue = issues.find((i) => i.id === active.id);
@@ -74,15 +94,23 @@ export function Board({
     [issues]
   );
 
+  const handleDragOver = useCallback(({ over }: DragOverEvent) => {
+    setDragOverStatusId(over ? String(over.id) : null);
+  }, []);
+
   const handleDragEnd = useCallback(
     async ({ active, over }: DragEndEvent) => {
       setActiveIssue(null);
+      setDragOverStatusId(null);
 
       if (!over || active.id === over.id) return;
 
       const newStatusId = over.id as string;
       const issue = issues.find((i) => i.id === active.id);
       if (!issue || issue.statusId === newStatusId) return;
+
+      // Hard-block disallowed transitions on the client side
+      if (!isTransitionAllowed(issue.statusId, newStatusId)) return;
 
       const previousIssues = issues;
 
@@ -102,7 +130,7 @@ export function Board({
         setIssues(previousIssues);
       }
     },
-    [issues]
+    [issues, isTransitionAllowed]
   );
 
   const issuesByStatus = statuses.reduce<Record<string, Issue[]>>((acc, status) => {
@@ -110,29 +138,36 @@ export function Board({
     return acc;
   }, {});
 
+  const statusesByCategory = statuses.reduce<Record<StatusCategory, Status[]>>(
+    (acc, status) => {
+      acc[status.category].push(status);
+      return acc;
+    },
+    { TODO: [], IN_PROGRESS: [], DONE: [] }
+  );
+
   return (
     <div className="flex items-start flex-1 min-h-0">
-      {/* Columns — horizontally scrollable, divided by vertical lines */}
+      {/* Columns — horizontally scrollable, grouped by status category */}
       <div className="flex-1 min-w-0 overflow-x-auto h-full">
         <DndContext
           sensors={sensors}
           collisionDetection={closestCorners}
           onDragStart={handleDragStart}
+          onDragOver={handleDragOver}
           onDragEnd={handleDragEnd}
         >
-          <div className="flex divide-x divide-border h-full">
-            {statuses.map((status) => (
-              <Column
-                key={status.id}
-                id={status.id}
-                name={status.name}
-                color={status.color}
-                issues={(issuesByStatus[status.id] ?? []).map((i) => ({
-                  ...i,
-                  isBlocked: i.linksTo.length > 0,
-                }))}
+          <div className="flex h-full">
+            {CATEGORY_ORDER.filter((cat) => statusesByCategory[cat].length > 0).map((cat) => (
+              <CategoryColumn
+                key={cat}
+                category={cat}
+                statuses={statusesByCategory[cat]}
+                issuesByStatus={issuesByStatus}
                 canEdit={canEdit}
                 slug={slug}
+                allowedTransitions={allowedTransitions}
+                activeIssue={activeIssue}
               />
             ))}
           </div>

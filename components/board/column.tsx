@@ -22,23 +22,23 @@ type ColumnProps = {
   issues: Issue[];
   canEdit: boolean;
   slug: string;
+  isDisabled?: boolean;
 };
 
-export function Column({ id, name, color, issues, canEdit, slug }: ColumnProps) {
-  const { setNodeRef, isOver } = useDroppable({ id });
+export function Column({ id, name, color, issues, canEdit, slug, isDisabled }: ColumnProps) {
+  const { setNodeRef, isOver } = useDroppable({ id, disabled: isDisabled });
 
   return (
     <div
-      className="flex flex-1 min-w-56 flex-col px-4 border-t-[3px] h-full"
+      className={`flex flex-1 min-w-56 flex-col px-4 border-t-[3px] h-full transition-opacity ${
+        isDisabled ? "opacity-40 cursor-not-allowed" : ""
+      }`}
       style={{ borderTopColor: color, backgroundColor: `${color}0d` }}
       data-testid={`column-${name.toLowerCase().replace(/\s+/g, "-")}`}
     >
       <div className="shrink-0 flex items-center justify-between pt-3 pb-3">
         <div className="flex items-center gap-2">
-          <span
-            className="h-2.5 w-2.5 rounded-full"
-            style={{ backgroundColor: color }}
-          />
+          <span className="h-2.5 w-2.5 rounded-full" style={{ backgroundColor: color }} />
           <h2 className="text-sm font-medium">{name}</h2>
           <span className="text-xs text-muted-foreground">{issues.length}</span>
         </div>
@@ -55,7 +55,7 @@ export function Column({ id, name, color, issues, canEdit, slug }: ColumnProps) 
         ref={setNodeRef}
         data-testid={`column-drop-${name.toLowerCase().replace(/\s+/g, "-")}`}
         className={`flex flex-col gap-2 flex-1 overflow-y-auto pb-3 rounded-lg p-1 transition-colors
-          ${isOver ? "bg-primary/5 ring-1 ring-primary/20" : ""}
+          ${isOver && !isDisabled ? "bg-primary/5 ring-1 ring-primary/20" : ""}
         `}
       >
         {issues.map((issue) => (

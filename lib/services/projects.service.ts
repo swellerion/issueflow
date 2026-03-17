@@ -1,13 +1,13 @@
 import { db } from "@/lib/db";
-import { ProjectRole } from "@/app/generated/prisma/enums";
+import { ProjectRole, StatusCategory } from "@/app/generated/prisma/enums";
 
 const SLUG_REGEX = /^[a-z0-9-]+$/;
 const RESERVED_SLUGS = ["admin", "api", "login", "register", "projects"];
 const DEFAULT_STATUSES = [
-  { name: "Backlog", color: "#94a3b8", position: 0 },
-  { name: "In Progress", color: "#6366f1", position: 1 },
-  { name: "In Review", color: "#f59e0b", position: 2 },
-  { name: "Done", color: "#22c55e", position: 3 },
+  { name: "Backlog",     color: "#94a3b8", position: 0, category: StatusCategory.TODO },
+  { name: "In Progress", color: "#6366f1", position: 1, category: StatusCategory.IN_PROGRESS },
+  { name: "In Review",   color: "#f59e0b", position: 2, category: StatusCategory.IN_PROGRESS },
+  { name: "Done",        color: "#22c55e", position: 3, category: StatusCategory.DONE },
 ];
 const DEFAULT_ISSUE_TYPES = [
   { name: "Task", icon: "check-square-2", color: "#6366f1", position: 0 },
@@ -164,6 +164,112 @@ export async function removeMember(projectId: string, userId: string) {
   return db.projectMembership.delete({
     where: { projectId_userId: { projectId, userId } },
   });
+}
+
+export async function adoptWorkflow(projectId: string, workflowId: string) {
+  return db.$transaction(async (tx) => {
+    const [workflow, project] = await Promise.all([
+      tx.workflow.findUnique({
+        where: { id: workflowId },
+        include: { states: true, transitions: true },
+      }),
+      tx.project.findUnique({
+        where: { id: projectId },
+        include: { statuses: true },
+      }),
+    ]);
+    if (!workflow) throw new Error("Workflow not found.");
+    if (!project) throw new Error("Project not found.");
+
+    // Match workflow states to project statuses by name (case-insensitive)
+    const statusByName = new Map(
+      project.statuses.map((s) => [s.name.toLowerCase(), s])
+    );
+    const unmatched: string[] = [];
+    const stateToStatus = new Map<string, string>(); // workflowStateId → statusId
+
+    for (const state of workflow.states) {
+      const status = statusByName.get(state.name.toLowerCase());
+      if (status) {
+        stateToStatus.set(state.id, status.id);
+      } else {
+        unmatched.push(state.name);
+      }
+    }
+
+    // Delete existing StatusTransitions for this project
+    await tx.statusTransition.deleteMany({ where: { projectId } });
+
+    // Insert matched transitions
+    const transitionData: { projectId: string; fromStatusId: string; toStatusId: string }[] = [];
+    for (const wt of workflow.transitions) {
+      const fromStatusId = stateToStatus.get(wt.fromStateId);
+      const toStatusId = stateToStatus.get(wt.toStateId);
+      if (fromStatusId && toStatusId) {
+        transitionData.push({ projectId, fromStatusId, toStatusId });
+      }
+    }
+
+    if (transitionData.length > 0) {
+      await tx.statusTransition.createMany({ data: transitionData, skipDuplicates: true });
+    }
+
+    await tx.project.update({ where: { id: projectId }, data: { workflowId } });
+
+    return { unmatched };
+  });
+}
+
+export async function detachWorkflow(projectId: string) {
+  return db.$transaction(async (tx) => {
+    await tx.statusTransition.deleteMany({ where: { projectId } });
+    await tx.project.update({ where: { id: projectId }, data: { workflowId: null } });
+  });
+}
+
+export async function createStatus(
+  projectId: string,
+  input: { name: string; color?: string; category?: StatusCategory }
+) {
+  const name = input.name.trim();
+  if (!name) throw new Error("Status name is required.");
+  const max = await db.status.aggregate({
+    where: { projectId },
+    _max: { position: true },
+  });
+  const position = (max._max.position ?? -1) + 1;
+  return db.status.create({
+    data: {
+      projectId,
+      name,
+      color: input.color ?? "#6366f1",
+      position,
+      category: input.category ?? StatusCategory.TODO,
+    },
+  });
+}
+
+export async function updateStatus(
+  statusId: string,
+  input: { name?: string; color?: string; position?: number; category?: StatusCategory }
+) {
+  return db.status.update({
+    where: { id: statusId },
+    data: {
+      ...(input.name !== undefined && { name: input.name.trim() }),
+      ...(input.color !== undefined && { color: input.color }),
+      ...(input.position !== undefined && { position: input.position }),
+      ...(input.category !== undefined && { category: input.category }),
+    },
+  });
+}
+
+export async function deleteStatus(statusId: string) {
+  const issueCount = await db.issue.count({ where: { statusId } });
+  if (issueCount > 0) {
+    throw new Error("Cannot delete a status that has issues assigned to it.");
+  }
+  return db.status.delete({ where: { id: statusId } });
 }
 
 export async function promoteToSuperAdmin(userId: string) {

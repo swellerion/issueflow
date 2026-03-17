@@ -184,7 +184,7 @@ export function IssueDetail({ issue, users, canEdit, projectIssues, slug }: Prop
     issue.project.issueTypes.find((t) => t.id === issueTypeId) ?? issue.issueType;
 
   return (
-    <div className="max-w-5xl mx-auto space-y-6">
+    <div className="max-w-5xl mx-auto space-y-6 p-6">
       <Link
         href={`/${slug}/board`}
         className="inline-flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground transition-colors"

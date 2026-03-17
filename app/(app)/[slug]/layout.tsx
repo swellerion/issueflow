@@ -30,16 +30,18 @@ export default async function SlugLayout({
   if (!membership && !isSuperAdmin) notFound();
 
   const showSettings = canManageMembers(membership?.role ?? null, isSuperAdmin);
+  const showWorkflows = showSettings || isSuperAdmin;
 
   return (
-    <div className="flex min-h-screen flex-col">
+    <div className="flex h-screen flex-col overflow-hidden">
       <Nav
         project={{ name: project.name, slug: project.slug }}
         projects={projects.map((p) => ({ name: p.name, slug: p.slug }))}
         showSettings={showSettings}
         isSuperAdmin={isSuperAdmin}
+        showWorkflows={showWorkflows}
       />
-      <main className="flex-1 p-6">{children}</main>
+      <main className="flex flex-col flex-1 min-h-0 overflow-hidden">{children}</main>
     </div>
   );
 }

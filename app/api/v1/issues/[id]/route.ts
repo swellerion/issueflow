@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
-import { getIssueById, updateIssue } from "@/lib/services/issues.service";
+import { getIssueById, updateIssue, isTransitionAllowed } from "@/lib/services/issues.service";
 import { getMembership } from "@/lib/services/projects.service";
 import { getUserFlags } from "@/lib/services/users.service";
 import { canEditIssue } from "@/lib/permissions";
@@ -62,6 +62,27 @@ export async function PATCH(
     const validStatus = issue.project.statuses.find((s) => s.id === statusId);
     if (!validStatus) {
       return NextResponse.json({ error: "Invalid statusId for this project." }, { status: 422 });
+    }
+
+    // Enforce workflow transition rules when a workflow is adopted
+    if (statusId !== issue.statusId && issue.project.workflowId) {
+      const allowed = await isTransitionAllowed(
+        issue.projectId,
+        issue.project.workflowId,
+        issue.statusId,
+        statusId
+      );
+      if (!allowed) {
+        console.warn("[workflow] blocked transition", {
+          issueId: id,
+          from: issue.statusId,
+          to: statusId,
+        });
+        return NextResponse.json(
+          { error: "This status transition is not allowed by the project workflow." },
+          { status: 422 }
+        );
+      }
     }
   }
 

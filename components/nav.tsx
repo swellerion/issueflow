@@ -14,9 +14,10 @@ type NavProps = {
   projects: ProjectRef[];
   showSettings: boolean;
   isSuperAdmin?: boolean;
+  showWorkflows?: boolean;
 };
 
-export function Nav({ project, projects, showSettings, isSuperAdmin }: NavProps) {
+export function Nav({ project, projects, showSettings, isSuperAdmin, showWorkflows }: NavProps) {
   const pathname = usePathname();
   const { data: session } = useSession();
   const [switcherOpen, setSwitcherOpen] = useState(false);
@@ -92,6 +93,11 @@ export function Nav({ project, projects, showSettings, isSuperAdmin }: NavProps)
             active={pathname.includes("/settings")}
           >
             Settings
+          </NavLink>
+        )}
+        {showWorkflows && (
+          <NavLink href="/workflows" active={pathname.startsWith("/workflows")}>
+            Workflows
           </NavLink>
         )}
         {isSuperAdmin && (

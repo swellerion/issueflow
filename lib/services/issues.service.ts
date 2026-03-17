@@ -81,6 +81,7 @@ export async function getIssueById(id: string) {
         include: {
           statuses: { orderBy: { position: "asc" } },
           issueTypes: { orderBy: { position: "asc" } },
+          statusTransitions: { select: { fromStatusId: true, toStatusId: true } },
         },
       },
       linksFrom: {
@@ -126,11 +127,28 @@ export async function updateIssue(id: string, input: UpdateIssueInput) {
   });
 }
 
+export async function isTransitionAllowed(
+  projectId: string,
+  workflowId: string | null,
+  fromStatusId: string,
+  toStatusId: string
+): Promise<boolean> {
+  if (!workflowId) return true;
+  const transition = await db.statusTransition.findUnique({
+    where: { projectId_fromStatusId_toStatusId: { projectId, fromStatusId, toStatusId } },
+    select: { id: true },
+  });
+  return transition !== null;
+}
+
 export async function getProjectBoard(projectId: string) {
   const [project, issues] = await Promise.all([
     db.project.findUnique({
       where: { id: projectId },
-      include: { statuses: { orderBy: { position: "asc" } } },
+      include: {
+        statuses: { orderBy: { position: "asc" } },
+        statusTransitions: { select: { fromStatusId: true, toStatusId: true } },
+      },
     }),
     db.issue.findMany({
       where: { projectId },

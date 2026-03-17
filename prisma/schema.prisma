@@ -19,6 +19,12 @@ enum LinkType {
   DUPLICATES
 }
 
+enum StatusCategory {
+  TODO
+  IN_PROGRESS
+  DONE
+}
+
 model User {
   id           String   @id @default(cuid())
   username     String   @unique
@@ -31,20 +37,24 @@ model User {
   comments       Comment[]
   projects       Project[]
   memberships    ProjectMembership[]
+  workflows      Workflow[]
 }
 
 model Project {
-  id        String   @id @default(cuid())
-  name      String
-  slug      String   @unique
-  createdAt DateTime @default(now())
-  ownerId   String
+  id         String   @id @default(cuid())
+  name       String
+  slug       String   @unique
+  createdAt  DateTime @default(now())
+  ownerId    String
+  workflowId String?
 
-  owner       User                @relation(fields: [ownerId], references: [id])
-  statuses    Status[]
-  issueTypes  IssueType[]
-  issues      Issue[]
-  memberships ProjectMembership[]
+  owner             User                @relation(fields: [ownerId], references: [id])
+  workflow          Workflow?           @relation(fields: [workflowId], references: [id], onDelete: SetNull)
+  statuses          Status[]
+  issueTypes        IssueType[]
+  issues            Issue[]
+  memberships       ProjectMembership[]
+  statusTransitions StatusTransition[]
 }
 
 model ProjectMembership {
@@ -62,14 +72,17 @@ model ProjectMembership {
 }
 
 model Status {
-  id        String @id @default(cuid())
+  id        String         @id @default(cuid())
   name      String
-  color     String @default("#6366f1")
+  color     String         @default("#6366f1")
   position  Int
   projectId String
+  category  StatusCategory @default(TODO)
 
-  project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
-  issues  Issue[]
+  project         Project            @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  issues          Issue[]
+  transitionsFrom StatusTransition[] @relation("TransitionFrom")
+  transitionsTo   StatusTransition[] @relation("TransitionTo")
 
   @@unique([projectId, position])
   @@unique([projectId, name])
@@ -145,4 +158,66 @@ model Comment {
   author User  @relation(fields: [authorId], references: [id])
 
   @@index([issueId])
+}
+
+model Workflow {
+  id          String   @id @default(cuid())
+  name        String   @unique
+  description String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  createdById String
+
+  createdBy   User                 @relation(fields: [createdById], references: [id])
+  states      WorkflowState[]
+  transitions WorkflowTransition[]
+  projects    Project[]
+}
+
+model WorkflowState {
+  id         String         @id @default(cuid())
+  workflowId String
+  name       String
+  color      String         @default("#6366f1")
+  positionX  Float          @default(0)
+  positionY  Float          @default(0)
+  position   Int            @default(0)
+  category   StatusCategory @default(TODO)
+
+  workflow        Workflow             @relation(fields: [workflowId], references: [id], onDelete: Cascade)
+  transitionsFrom WorkflowTransition[] @relation("TransitionFrom")
+  transitionsTo   WorkflowTransition[] @relation("TransitionTo")
+
+  @@unique([workflowId, name])
+  @@index([workflowId])
+}
+
+model WorkflowTransition {
+  id           String  @id @default(cuid())
+  workflowId   String
+  fromStateId  String
+  toStateId    String
+  sourceHandle String?
+  targetHandle String?
+
+  workflow  Workflow      @relation(fields: [workflowId], references: [id], onDelete: Cascade)
+  fromState WorkflowState @relation("TransitionFrom", fields: [fromStateId], references: [id], onDelete: Cascade)
+  toState   WorkflowState @relation("TransitionTo",   fields: [toStateId],   references: [id], onDelete: Cascade)
+
+  @@unique([fromStateId, toStateId])
+  @@index([workflowId])
+}
+
+model StatusTransition {
+  id           String @id @default(cuid())
+  projectId    String
+  fromStatusId String
+  toStatusId   String
+
+  project    Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  fromStatus Status  @relation("TransitionFrom", fields: [fromStatusId], references: [id], onDelete: Cascade)
+  toStatus   Status  @relation("TransitionTo",   fields: [toStatusId],   references: [id], onDelete: Cascade)
+
+  @@unique([projectId, fromStatusId, toStatusId])
+  @@index([projectId, fromStatusId])
 }
