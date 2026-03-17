@@ -61,6 +61,32 @@ export async function PUT(request: Request, { params }: Params) {
     return NextResponse.json({ error: "states and transitions must be arrays." }, { status: 422 });
   }
 
+  const VALID_CATEGORIES = ["TODO", "IN_PROGRESS", "DONE"];
+  for (const s of states) {
+    if (typeof s !== "object" || s === null) {
+      return NextResponse.json({ error: "Each state must be an object." }, { status: 422 });
+    }
+    const st = s as Record<string, unknown>;
+    if (typeof st.id !== "string" || !st.id.trim()) {
+      return NextResponse.json({ error: "Each state must have a non-empty string id." }, { status: 422 });
+    }
+    if (typeof st.name !== "string" || !st.name.trim()) {
+      return NextResponse.json({ error: "Each state must have a non-empty string name." }, { status: 422 });
+    }
+    if (typeof st.color !== "string" || !/^#[0-9a-fA-F]{6}$/.test(st.color)) {
+      return NextResponse.json({ error: `State "${st.id}" has an invalid color (expected #rrggbb).` }, { status: 422 });
+    }
+    if (!VALID_CATEGORIES.includes(st.category as string)) {
+      return NextResponse.json({ error: `State "${st.id}" has an invalid category.` }, { status: 422 });
+    }
+    if (
+      typeof st.positionX !== "number" || !isFinite(st.positionX) ||
+      typeof st.positionY !== "number" || !isFinite(st.positionY)
+    ) {
+      return NextResponse.json({ error: `State "${st.id}" has invalid position values.` }, { status: 422 });
+    }
+  }
+
   try {
     const updated = await updateWorkflowCanvas(
       id,

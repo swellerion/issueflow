@@ -44,14 +44,15 @@ export default async function BoardPage({ params, searchParams }: Props) {
     }
   }
 
-  // Build allowed transitions map when a workflow is adopted
-  const allowedTransitions: Record<string, string[]> | null =
-    boardProject?.workflowId && boardProject.statusTransitions.length > 0
-      ? boardProject.statusTransitions.reduce<Record<string, string[]>>((acc, t) => {
-          (acc[t.fromStatusId] ??= []).push(t.toStatusId);
-          return acc;
-        }, {})
-      : null;
+  // Build allowed transitions map when a workflow is adopted.
+  // If workflowId is set but no transitions matched (e.g. all state names unrecognised),
+  // pass an empty map {} so all moves are blocked — not null (which means unrestricted).
+  const allowedTransitions: Record<string, string[]> | null = boardProject?.workflowId
+    ? boardProject.statusTransitions.reduce<Record<string, string[]>>((acc, t) => {
+        (acc[t.fromStatusId] ??= []).push(t.toStatusId);
+        return acc;
+      }, {})
+    : null;
 
   return (
     <div className="flex flex-col flex-1 min-h-0 p-6">

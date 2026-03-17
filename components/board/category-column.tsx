@@ -2,6 +2,7 @@
 
 import { Column } from "@/components/board/column";
 import { getCategoryMeta, type StatusCategory } from "@/lib/status-category";
+import { isTransitionAllowed, type AllowedTransitions } from "@/lib/allowed-transitions";
 
 type Status = {
   id: string;
@@ -27,7 +28,7 @@ type CategoryColumnProps = {
   issuesByStatus: Record<string, Issue[]>;
   canEdit: boolean;
   slug: string;
-  allowedTransitions: Record<string, string[]> | null;
+  allowedTransitions: AllowedTransitions;
   activeIssue: { id: string; statusId: string } | null;
 };
 
@@ -46,10 +47,6 @@ export function CategoryColumn({
     0
   );
 
-  function isTransitionAllowed(fromId: string, toId: string): boolean {
-    if (!allowedTransitions) return true;
-    return allowedTransitions[fromId]?.includes(toId) ?? false;
-  }
 
   return (
     <div className="flex flex-col flex-1 min-w-0 h-full border-r last:border-r-0 border-border">
@@ -70,7 +67,7 @@ export function CategoryColumn({
           const isDisabled =
             !!activeIssue &&
             activeIssue.statusId !== status.id &&
-            !isTransitionAllowed(activeIssue.statusId, status.id);
+            !isTransitionAllowed(allowedTransitions, activeIssue.statusId, status.id);
 
           return (
             <Column

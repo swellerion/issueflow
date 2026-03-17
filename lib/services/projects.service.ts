@@ -111,6 +111,14 @@ export async function getMembership(projectId: string, userId: string) {
   });
 }
 
+export async function hasAnyAdminMembership(userId: string): Promise<boolean> {
+  const membership = await db.projectMembership.findFirst({
+    where: { userId, role: "ADMIN" },
+    select: { projectId: true },
+  });
+  return membership !== null;
+}
+
 export async function getMembers(projectId: string) {
   return db.projectMembership.findMany({
     where: { projectId },

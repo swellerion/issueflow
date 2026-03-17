@@ -3,7 +3,7 @@ import { auth } from "@/lib/auth";
 import { getUserFlags } from "@/lib/services/users.service";
 import { getProjectBySlug, getMembership } from "@/lib/services/projects.service";
 import { canManageMembers } from "@/lib/permissions";
-import Link from "next/link";
+import { SettingsTab } from "@/components/settings/settings-tab";
 
 type Props = {
   children: React.ReactNode;
@@ -49,16 +49,3 @@ export default async function SettingsLayout({ children, params }: Props) {
   );
 }
 
-function SettingsTab({ href, label }: { href: string; label: string }) {
-  // We can't use usePathname in a server component, so we render as a plain Link.
-  // The active state is handled via CSS :global(.active) applied by client-side nav,
-  // but here we keep it simple — the parent page can optionally style its own tab.
-  return (
-    <Link
-      href={href}
-      className="px-4 py-2 text-sm font-medium text-muted-foreground hover:text-foreground transition-colors border-b-2 border-transparent hover:border-foreground/30 -mb-px"
-    >
-      {label}
-    </Link>
-  );
-}

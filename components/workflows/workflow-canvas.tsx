@@ -79,17 +79,17 @@ function dbTransitionToEdge(t: DbTransition): Edge {
   };
 }
 
-let tempIdCounter = 0;
-function nextTempId() {
-  return `new-${++tempIdCounter}`;
-}
-
 export function WorkflowCanvas({
   workflowId,
   initialStates,
   initialTransitions,
   canEdit,
 }: WorkflowCanvasProps) {
+  const tempIdCounterRef = useRef(0);
+  function nextTempId() {
+    return `new-${++tempIdCounterRef.current}`;
+  }
+
   const [nodes, setNodes, onNodesChange] = useNodesState<Node<WorkflowNodeData>>(
     initialStates.map(dbStateToNode)
   );

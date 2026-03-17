@@ -8,23 +8,25 @@ import { db } from "@/lib/db";
 
 type Params = { params: Promise<{ id: string; statusId: string }> };
 
+type AssertResult = { result: "ok" } | { result: "forbidden" } | { result: "not_found" };
+
 async function assertAdminAndStatus(
   projectId: string,
   statusId: string,
   userId: string
-) {
+): Promise<AssertResult> {
   const [membership, flags, status] = await Promise.all([
     getMembership(projectId, userId),
     getUserFlags(userId),
     db.status.findUnique({ where: { id: statusId }, select: { projectId: true } }),
   ]);
   if (!canManageMembers(membership?.role ?? null, flags?.isSuperAdmin ?? false)) {
-    return { allowed: false, status: null } as const;
+    return { result: "forbidden" };
   }
   if (!status || status.projectId !== projectId) {
-    return { allowed: false, status: null } as const;
+    return { result: "not_found" };
   }
-  return { allowed: true, status } as const;
+  return { result: "ok" };
 }
 
 export async function PATCH(request: Request, { params }: Params) {
@@ -34,9 +36,12 @@ export async function PATCH(request: Request, { params }: Params) {
   }
   const { id: projectId, statusId } = await params;
 
-  const { allowed } = await assertAdminAndStatus(projectId, statusId, session.user.id);
-  if (!allowed) {
+  const check = await assertAdminAndStatus(projectId, statusId, session.user.id);
+  if (check.result === "forbidden") {
     return NextResponse.json({ error: "Forbidden." }, { status: 403 });
+  }
+  if (check.result === "not_found") {
+    return NextResponse.json({ error: "Status not found." }, { status: 404 });
   }
 
   let body: unknown;
@@ -69,9 +74,12 @@ export async function DELETE(_req: Request, { params }: Params) {
   }
   const { id: projectId, statusId } = await params;
 
-  const { allowed } = await assertAdminAndStatus(projectId, statusId, session.user.id);
-  if (!allowed) {
+  const check = await assertAdminAndStatus(projectId, statusId, session.user.id);
+  if (check.result === "forbidden") {
     return NextResponse.json({ error: "Forbidden." }, { status: 403 });
+  }
+  if (check.result === "not_found") {
+    return NextResponse.json({ error: "Status not found." }, { status: 404 });
   }
 
   try {

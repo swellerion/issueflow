@@ -1,8 +1,7 @@
 import { redirect } from "next/navigation";
 import { auth } from "@/lib/auth";
 import { getUserFlags } from "@/lib/services/users.service";
-import { getProjects, getMembership } from "@/lib/services/projects.service";
-import { ProjectRole } from "@/app/generated/prisma/enums";
+import { hasAnyAdminMembership } from "@/lib/services/projects.service";
 import Link from "next/link";
 
 export default async function WorkflowsLayout({ children }: { children: React.ReactNode }) {
@@ -12,14 +11,8 @@ export default async function WorkflowsLayout({ children }: { children: React.Re
   const userFlags = await getUserFlags(session.user.id);
   const isSuperAdmin = userFlags?.isSuperAdmin ?? false;
 
-  if (!isSuperAdmin) {
-    const userId = session.user.id;
-    const projects = await getProjects(userId);
-    const memberships = await Promise.all(
-      projects.map((p) => getMembership(p.id, userId))
-    );
-    const hasAdminRole = memberships.some((m) => m?.role === ProjectRole.ADMIN);
-    if (!hasAdminRole) redirect("/");
+  if (!isSuperAdmin && !(await hasAnyAdminMembership(session.user.id))) {
+    redirect("/");
   }
 
   return (

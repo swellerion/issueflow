@@ -17,6 +17,7 @@ import { IssueCard } from "@/components/board/issue-card";
 import { IssuePanel, type PanelIssue } from "@/components/board/issue-panel";
 
 import { type StatusCategory } from "@/lib/status-category";
+import { isTransitionAllowed, type AllowedTransitions } from "@/lib/allowed-transitions";
 
 const CATEGORY_ORDER = ["TODO", "IN_PROGRESS", "DONE"] as const;
 
@@ -39,9 +40,6 @@ type Issue = {
 };
 
 type User = { id: string; username: string };
-
-// null means no workflow → all transitions allowed
-type AllowedTransitions = Record<string, string[]> | null;
 
 type BoardProps = {
   statuses: Status[];
@@ -78,11 +76,9 @@ export function Board({
     useSensor(PointerSensor, { activationConstraint: { distance: 8 } })
   );
 
-  const isTransitionAllowed = useCallback(
-    (fromStatusId: string, toStatusId: string): boolean => {
-      if (!allowedTransitions) return true;
-      return allowedTransitions[fromStatusId]?.includes(toStatusId) ?? false;
-    },
+  const checkTransition = useCallback(
+    (fromStatusId: string, toStatusId: string): boolean =>
+      isTransitionAllowed(allowedTransitions, fromStatusId, toStatusId),
     [allowedTransitions]
   );
 
@@ -110,7 +106,7 @@ export function Board({
       if (!issue || issue.statusId === newStatusId) return;
 
       // Hard-block disallowed transitions on the client side
-      if (!isTransitionAllowed(issue.statusId, newStatusId)) return;
+      if (!checkTransition(issue.statusId, newStatusId)) return;
 
       const previousIssues = issues;
 
@@ -130,7 +126,7 @@ export function Board({
         setIssues(previousIssues);
       }
     },
-    [issues, isTransitionAllowed]
+    [issues, checkTransition]
   );
 
   const issuesByStatus = statuses.reduce<Record<string, Issue[]>>((acc, status) => {

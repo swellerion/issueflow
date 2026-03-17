@@ -30,7 +30,6 @@ export default async function SlugLayout({
   if (!membership && !isSuperAdmin) notFound();
 
   const showSettings = canManageMembers(membership?.role ?? null, isSuperAdmin);
-  const showWorkflows = showSettings || isSuperAdmin;
 
   return (
     <div className="flex h-screen flex-col overflow-hidden">
@@ -39,7 +38,7 @@ export default async function SlugLayout({
         projects={projects.map((p) => ({ name: p.name, slug: p.slug }))}
         showSettings={showSettings}
         isSuperAdmin={isSuperAdmin}
-        showWorkflows={showWorkflows}
+        showWorkflows={showSettings}
       />
       <main className="flex flex-col flex-1 min-h-0 overflow-hidden">{children}</main>
     </div>
