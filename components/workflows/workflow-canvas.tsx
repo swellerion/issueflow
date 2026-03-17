@@ -86,9 +86,7 @@ export function WorkflowCanvas({
   canEdit,
 }: WorkflowCanvasProps) {
   const tempIdCounterRef = useRef(0);
-  function nextTempId() {
-    return `new-${++tempIdCounterRef.current}`;
-  }
+  const nextTempId = useCallback(() => `new-${++tempIdCounterRef.current}`, []);
 
   const [nodes, setNodes, onNodesChange] = useNodesState<Node<WorkflowNodeData>>(
     initialStates.map(dbStateToNode)
