@@ -116,7 +116,7 @@ export async function updateIssue(id: string, input: UpdateIssueInput) {
       ...(input.issueTypeId !== undefined && { issueTypeId: input.issueTypeId }),
       ...(input.assigneeId !== undefined && { assigneeId: input.assigneeId }),
       ...(input.title !== undefined && { title: input.title.trim() }),
-      ...(input.description !== undefined && { description: input.description.trim() || null }),
+      ...(input.description !== undefined && { description: input.description || null }),
     },
     include: {
       status: true,
@@ -147,6 +147,7 @@ export async function getProjectBoard(projectId: string) {
       where: { id: projectId },
       include: {
         statuses: { orderBy: { position: "asc" } },
+        issueTypes: { orderBy: { position: "asc" } },
         statusTransitions: { select: { fromStatusId: true, toStatusId: true } },
       },
     }),

@@ -11,9 +11,11 @@ import {
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Textarea } from "@/components/ui/textarea";
 import { Separator } from "@/components/ui/separator";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
+import { RichTextEditorDynamic } from "@/components/ui/rich-text-editor-dynamic";
+import { RichTextViewer } from "@/components/ui/rich-text-viewer";
+import { isRichTextEmpty } from "@/lib/rich-text";
 import {
   Select,
   SelectContent,
@@ -33,7 +35,7 @@ const ICON_MAP: Record<string, React.ComponentType<LucideProps>> = {
 type User = { id: string; username: string };
 type Status = { id: string; name: string; color: string; position: number };
 type IssueType = { id: string; name: string; icon: string; color: string };
-type Comment = { id: string; body: string; createdAt: Date | string; author: User };
+type Comment = { id: string; body: string; createdAt: Date | string; author: User & { id: string } };
 
 type LinkedIssueRef = { id: string; identifier: string; title: string; status: { name: string; color: string } };
 
@@ -204,6 +206,7 @@ type Props = {
   canEdit: boolean;
   projectIssues: ProjectIssue[];
   slug: string;
+  currentUserId: string;
 };
 
 function formatDate(value: Date | string) {
@@ -214,7 +217,7 @@ function formatDate(value: Date | string) {
   });
 }
 
-export function IssuePanel({ issue, users, canEdit, projectIssues, slug }: Props) {
+export function IssuePanel({ issue, users, canEdit, projectIssues, slug, currentUserId }: Props) {
   const router = useRouter();
 
   const [statusId, setStatusId] = useState(issue.statusId);
@@ -477,40 +480,45 @@ export function IssuePanel({ issue, users, canEdit, projectIssues, slug }: Props
 
           {/* Description */}
           {canEdit && editingDescription ? (
-            <Textarea
-              autoFocus
-              value={descriptionValue}
-              onChange={(e) => setDescriptionValue(e.target.value)}
-              onBlur={handleDescriptionSave}
-              onKeyDown={(e) => {
-                if (e.key === "Escape") {
-                  setDescriptionValue(issue.description ?? "");
-                  setEditingDescription(false);
-                }
-              }}
-              rows={4}
-              placeholder="Add a description…"
-              className="text-sm"
-            />
+            <div className="space-y-1.5">
+              <RichTextEditorDynamic
+                content={descriptionValue}
+                onChange={setDescriptionValue}
+                placeholder="Add a description…"
+                autoFocus
+              />
+              <div className="flex gap-1.5">
+                <Button size="sm" className="h-7 text-xs" onClick={handleDescriptionSave}>
+                  Save
+                </Button>
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  className="h-7 text-xs"
+                  onClick={() => {
+                    setDescriptionValue(issue.description ?? "");
+                    setEditingDescription(false);
+                  }}
+                >
+                  Cancel
+                </Button>
+              </div>
+            </div>
           ) : canEdit ? (
             <div
               className="cursor-pointer rounded px-1 -mx-1 hover:bg-muted/50 min-h-[2rem]"
               onClick={() => setEditingDescription(true)}
             >
-              {descriptionValue ? (
-                <p className="text-sm text-muted-foreground whitespace-pre-wrap leading-relaxed">
-                  {descriptionValue}
-                </p>
+              {descriptionValue && !isRichTextEmpty(descriptionValue) ? (
+                <RichTextViewer html={descriptionValue} className="text-muted-foreground" />
               ) : (
                 <p className="text-sm text-muted-foreground italic">
                   Click to add a description…
                 </p>
               )}
             </div>
-          ) : issue.description ? (
-            <p className="text-sm text-muted-foreground whitespace-pre-wrap leading-relaxed">
-              {issue.description}
-            </p>
+          ) : issue.description && !isRichTextEmpty(issue.description) ? (
+            <RichTextViewer html={issue.description} className="text-muted-foreground" />
           ) : (
             <p className="text-sm text-muted-foreground italic">No description.</p>
           )}
@@ -558,7 +566,7 @@ export function IssuePanel({ issue, users, canEdit, projectIssues, slug }: Props
                     {comment.author.username.slice(0, 2).toUpperCase()}
                   </AvatarFallback>
                 </Avatar>
-                <div className="space-y-0.5">
+                <div className="flex-1 space-y-0.5">
                   <div className="flex items-center gap-2">
                     <span className="text-xs font-medium">
                       {comment.author.username}
@@ -566,8 +574,20 @@ export function IssuePanel({ issue, users, canEdit, projectIssues, slug }: Props
                     <span className="text-xs text-muted-foreground">
                       {formatDate(comment.createdAt)}
                     </span>
+                    {(comment.author.id === currentUserId || canEdit) && (
+                      <button
+                        onClick={async () => {
+                          await fetch(`/api/v1/issues/${issue.id}/comments/${comment.id}`, { method: "DELETE" });
+                          router.refresh();
+                        }}
+                        className="ml-auto text-muted-foreground hover:text-destructive transition-colors"
+                        aria-label="Delete comment"
+                      >
+                        <X className="h-3 w-3" />
+                      </button>
+                    )}
                   </div>
-                  <p className="text-sm whitespace-pre-wrap">{comment.body}</p>
+                  <RichTextViewer html={comment.body} />
                 </div>
               </div>
             ))}
@@ -580,18 +600,15 @@ export function IssuePanel({ issue, users, canEdit, projectIssues, slug }: Props
                 {commentError && (
                   <p className="text-xs text-destructive">{commentError}</p>
                 )}
-                <Textarea
-                  value={commentBody}
-                  onChange={(e) => setCommentBody(e.target.value)}
+                <RichTextEditorDynamic
+                  content={commentBody}
+                  onChange={setCommentBody}
                   placeholder="Add a comment…"
-                  rows={2}
-                  disabled={submittingComment}
-                  className="text-sm"
                 />
                 <Button
                   type="submit"
                   size="sm"
-                  disabled={submittingComment || !commentBody.trim()}
+                  disabled={submittingComment || isRichTextEmpty(commentBody)}
                 >
                   {submittingComment ? "Saving…" : "Save"}
                 </Button>

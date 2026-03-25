@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
-import { ArrowLeft, Plus, Bug, CheckSquare2, Sparkles, BookOpen, CircleDot, X, type LucideProps } from "lucide-react";
+import { ArrowLeft, Plus, Bug, CheckSquare2, Sparkles, BookOpen, CircleDot, X, Trash2, type LucideProps } from "lucide-react";
 
 const ICON_MAP: Record<string, React.ComponentType<LucideProps>> = {
   "bug": Bug,
@@ -15,9 +15,11 @@ const ICON_MAP: Record<string, React.ComponentType<LucideProps>> = {
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Textarea } from "@/components/ui/textarea";
 import { Separator } from "@/components/ui/separator";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
+import { RichTextEditorDynamic } from "@/components/ui/rich-text-editor-dynamic";
+import { RichTextViewer } from "@/components/ui/rich-text-viewer";
+import { isRichTextEmpty } from "@/lib/rich-text";
 import {
   Select,
   SelectContent,
@@ -29,7 +31,7 @@ import {
 type User = { id: string; username: string };
 type Status = { id: string; name: string; color: string; position: number };
 type IssueType = { id: string; name: string; icon: string; color: string };
-type Comment = { id: string; body: string; createdAt: Date | string; author: User };
+type Comment = { id: string; body: string; createdAt: Date | string; author: User & { id: string } };
 type LinkedIssueRef = { id: string; identifier: string; title: string; status: { name: string; color: string } };
 type ProjectIssue = { id: string; identifier: string; title: string };
 
@@ -63,6 +65,7 @@ type Props = {
   canEdit: boolean;
   projectIssues: ProjectIssue[];
   slug: string;
+  currentUserId: string;
 };
 
 function formatDate(value: Date | string) {
@@ -73,7 +76,7 @@ function formatDate(value: Date | string) {
   });
 }
 
-export function IssueDetail({ issue, users, canEdit, projectIssues, slug }: Props) {
+export function IssueDetail({ issue, users, canEdit, projectIssues, slug, currentUserId }: Props) {
   const router = useRouter();
   const [statusId, setStatusId] = useState(issue.statusId);
   const [issueTypeId, setIssueTypeId] = useState(issue.issueType?.id ?? "none");
@@ -238,39 +241,42 @@ export function IssueDetail({ issue, users, canEdit, projectIssues, slug }: Prop
 
           {/* Description — inline editable for ADMIN/MEMBER */}
           {canEdit && editingDescription ? (
-            <Textarea
-              autoFocus
-              value={descriptionValue}
-              onChange={(e) => setDescriptionValue(e.target.value)}
-              onBlur={handleDescriptionSave}
-              onKeyDown={(e) => {
-                if (e.key === "Escape") {
-                  setDescriptionValue(issue.description ?? "");
-                  setEditingDescription(false);
-                }
-              }}
-              rows={5}
-              placeholder="Add a description…"
-            />
+            <div className="space-y-2">
+              <RichTextEditorDynamic
+                content={descriptionValue}
+                onChange={setDescriptionValue}
+                placeholder="Add a description…"
+                autoFocus
+              />
+              <div className="flex gap-2">
+                <Button size="sm" onClick={handleDescriptionSave}>Save</Button>
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  onClick={() => {
+                    setDescriptionValue(issue.description ?? "");
+                    setEditingDescription(false);
+                  }}
+                >
+                  Cancel
+                </Button>
+              </div>
+            </div>
           ) : canEdit ? (
             <div
               className="cursor-pointer rounded px-1 -mx-1 hover:bg-muted/50 min-h-[2rem]"
               onClick={() => setEditingDescription(true)}
             >
-              {descriptionValue ? (
-                <p className="text-sm text-muted-foreground whitespace-pre-wrap leading-relaxed">
-                  {descriptionValue}
-                </p>
+              {descriptionValue && !isRichTextEmpty(descriptionValue) ? (
+                <RichTextViewer html={descriptionValue} className="text-muted-foreground" />
               ) : (
                 <p className="text-sm text-muted-foreground italic">
                   Click to add a description…
                 </p>
               )}
             </div>
-          ) : issue.description ? (
-            <p className="text-sm text-muted-foreground whitespace-pre-wrap leading-relaxed">
-              {issue.description}
-            </p>
+          ) : issue.description && !isRichTextEmpty(issue.description) ? (
+            <RichTextViewer html={issue.description} className="text-muted-foreground" />
           ) : (
             <p className="text-sm text-muted-foreground italic">No description.</p>
           )}
@@ -303,10 +309,20 @@ export function IssueDetail({ issue, users, canEdit, projectIssues, slug }: Prop
                     <span className="text-xs text-muted-foreground">
                       {formatDate(comment.createdAt)}
                     </span>
+                    {(comment.author.id === currentUserId || canEdit) && (
+                      <button
+                        onClick={async () => {
+                          await fetch(`/api/v1/issues/${issue.id}/comments/${comment.id}`, { method: "DELETE" });
+                          router.refresh();
+                        }}
+                        className="ml-auto text-muted-foreground hover:text-destructive transition-colors"
+                        aria-label="Delete comment"
+                      >
+                        <X className="h-3.5 w-3.5" />
+                      </button>
+                    )}
                   </div>
-                  <p className="text-sm whitespace-pre-wrap leading-relaxed">
-                    {comment.body}
-                  </p>
+                  <RichTextViewer html={comment.body} />
                 </div>
               </div>
             ))}
@@ -320,17 +336,15 @@ export function IssueDetail({ issue, users, canEdit, projectIssues, slug }: Prop
                 {commentError && (
                   <p className="text-xs text-destructive">{commentError}</p>
                 )}
-                <Textarea
-                  value={commentBody}
-                  onChange={(e) => setCommentBody(e.target.value)}
+                <RichTextEditorDynamic
+                  content={commentBody}
+                  onChange={setCommentBody}
                   placeholder="Add a comment…"
-                  rows={3}
-                  disabled={submittingComment}
                 />
                 <Button
                   type="submit"
                   size="sm"
-                  disabled={submittingComment || !commentBody.trim()}
+                  disabled={submittingComment || isRichTextEmpty(commentBody)}
                 >
                   {submittingComment ? "Saving…" : "Save"}
                 </Button>

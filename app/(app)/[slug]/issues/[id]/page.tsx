@@ -35,6 +35,7 @@ export default async function IssueDetailPage({ params }: Props) {
       users={users}
       canEdit={canEdit}
       slug={slug}
+      currentUserId={session.user.id}
       projectIssues={projectIssues.map((i) => ({
         id: i.id,
         identifier: i.identifier,

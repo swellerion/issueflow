@@ -6,7 +6,8 @@ import { Bug, CheckSquare2, Sparkles, BookOpen, CircleDot, type LucideProps } fr
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Textarea } from "@/components/ui/textarea";
+import { RichTextEditorDynamic } from "@/components/ui/rich-text-editor-dynamic";
+import { isRichTextEmpty } from "@/lib/rich-text";
 import {
   Select,
   SelectContent,
@@ -41,6 +42,7 @@ export function NewIssueForm({ statuses, defaultStatusId, issueTypes, defaultIss
   const router = useRouter();
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+  const [description, setDescription] = useState("");
   const [statusId, setStatusId] = useState(defaultStatusId);
   const [issueTypeId, setIssueTypeId] = useState(defaultIssueTypeId);
   const [assigneeId, setAssigneeId] = useState<string>("none");
@@ -52,14 +54,13 @@ export function NewIssueForm({ statuses, defaultStatusId, issueTypes, defaultIss
 
     const form = new FormData(e.currentTarget);
     const title = form.get("title") as string;
-    const description = form.get("description") as string;
 
     const res = await fetch("/api/v1/issues", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         title,
-        description: description || undefined,
+        description: isRichTextEmpty(description) ? undefined : description,
         statusId,
         issueTypeId: issueTypeId || undefined,
         assigneeId: assigneeId === "none" ? undefined : assigneeId,
@@ -96,13 +97,11 @@ export function NewIssueForm({ statuses, defaultStatusId, issueTypes, defaultIss
       </div>
 
       <div className="space-y-2">
-        <Label htmlFor="description">Description</Label>
-        <Textarea
-          id="description"
-          name="description"
+        <Label>Description</Label>
+        <RichTextEditorDynamic
+          content={description}
+          onChange={setDescription}
           placeholder="Add more details…"
-          rows={5}
-          disabled={loading}
         />
       </div>
 

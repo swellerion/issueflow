@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useMemo } from "react";
 import {
   DndContext,
   DragOverlay,
@@ -15,9 +15,11 @@ import {
 import { CategoryColumn } from "@/components/board/category-column";
 import { IssueCard } from "@/components/board/issue-card";
 import { IssuePanel, type PanelIssue } from "@/components/board/issue-panel";
+import { BoardFilters } from "@/components/board/board-filters";
 
 import { type StatusCategory } from "@/lib/status-category";
 import { isTransitionAllowed, type AllowedTransitions } from "@/lib/allowed-transitions";
+import { filterIssues, EMPTY_FILTERS, type BoardFilters as Filters } from "@/lib/board-filters";
 
 const CATEGORY_ORDER = ["TODO", "IN_PROGRESS", "DONE"] as const;
 
@@ -34,35 +36,41 @@ type Issue = {
   identifier: string;
   title: string;
   statusId: string;
-  issueType?: { name: string; icon: string; color: string } | null;
+  issueType?: { id: string; name: string; icon: string; color: string } | null;
   assignee: { id: string; username: string } | null;
   linksTo: { id: string }[];
 };
 
 type User = { id: string; username: string };
+type IssueType = { id: string; name: string; icon: string; color: string };
 
 type BoardProps = {
   statuses: Status[];
+  issueTypes: IssueType[];
   issues: Issue[];
   canEdit: boolean;
   selectedIssue: PanelIssue | null;
   users: User[];
   slug: string;
   allowedTransitions: AllowedTransitions;
+  currentUserId: string;
 };
 
 export function Board({
   statuses,
+  issueTypes,
   issues: initialIssues,
   canEdit,
   selectedIssue,
   users,
   slug,
   allowedTransitions,
+  currentUserId,
 }: BoardProps) {
   const [issues, setIssues] = useState<Issue[]>(initialIssues);
   const [activeIssue, setActiveIssue] = useState<Issue | null>(null);
   const [dragOverStatusId, setDragOverStatusId] = useState<string | null>(null);
+  const [filters, setFilters] = useState<Filters>(EMPTY_FILTERS);
 
   // Keep board cards in sync when the panel edits an issue (router.refresh())
   useEffect(() => {
@@ -129,8 +137,11 @@ export function Board({
     [issues, checkTransition]
   );
 
+  // DnD operates on full issues; filtering is only visual
+  const visibleIssues = useMemo(() => filterIssues(issues, filters), [issues, filters]);
+
   const issuesByStatus = statuses.reduce<Record<string, Issue[]>>((acc, status) => {
-    acc[status.id] = issues.filter((issue) => issue.statusId === status.id);
+    acc[status.id] = visibleIssues.filter((issue) => issue.statusId === status.id);
     return acc;
   }, {});
 
@@ -143,7 +154,14 @@ export function Board({
   );
 
   return (
-    <div className="flex items-start flex-1 min-h-0">
+    <div className="flex flex-col flex-1 min-h-0">
+      <BoardFilters
+        filters={filters}
+        onChange={setFilters}
+        users={users}
+        issueTypes={issueTypes}
+      />
+      <div className="flex items-start flex-1 min-h-0">
       {/* Columns — horizontally scrollable, grouped by status category */}
       <div className="flex-1 min-w-0 overflow-x-auto h-full">
         <DndContext
@@ -185,6 +203,7 @@ export function Board({
               users={users}
               canEdit={canEdit}
               slug={slug}
+              currentUserId={currentUserId}
               projectIssues={issues.map((i) => ({
                 id: i.id,
                 identifier: i.identifier,
@@ -193,6 +212,7 @@ export function Board({
             />
         </div>
       )}
+      </div>
     </div>
   );
 }

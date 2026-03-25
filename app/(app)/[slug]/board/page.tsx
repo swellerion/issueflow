@@ -24,23 +24,19 @@ export default async function BoardPage({ params, searchParams }: Props) {
 
   const { issueId } = await searchParams;
 
-  const [{ project: boardProject, issues }, membership] = await Promise.all([
+  const [{ project: boardProject, issues }, membership, users] = await Promise.all([
     getProjectBoard(project.id),
     getMembership(project.id, session.user.id),
+    getUsers(),
   ]);
 
   const canEdit = canEditIssue(membership?.role ?? null, isSuperAdmin);
 
   let selectedIssue = null;
-  let users: { id: string; username: string }[] = [];
   if (issueId) {
-    const [issue, allUsers] = await Promise.all([
-      getIssueById(issueId),
-      getUsers(),
-    ]);
+    const issue = await getIssueById(issueId);
     if (issue?.project.id === project.id) {
       selectedIssue = issue;
-      users = allUsers;
     }
   }
 
@@ -64,12 +60,14 @@ export default async function BoardPage({ params, searchParams }: Props) {
       </div>
       <Board
         statuses={project.statuses}
+        issueTypes={boardProject?.issueTypes ?? []}
         issues={issues}
         canEdit={canEdit}
         selectedIssue={selectedIssue}
         users={users}
         slug={slug}
         allowedTransitions={allowedTransitions}
+        currentUserId={session.user.id}
       />
     </div>
   );
