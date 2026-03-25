@@ -10,7 +10,6 @@ import {
   useSensors,
   type DragStartEvent,
   type DragEndEvent,
-  type DragOverEvent,
 } from "@dnd-kit/core";
 import { CategoryColumn } from "@/components/board/category-column";
 import { IssueCard } from "@/components/board/issue-card";
@@ -69,7 +68,6 @@ export function Board({
 }: BoardProps) {
   const [issues, setIssues] = useState<Issue[]>(initialIssues);
   const [activeIssue, setActiveIssue] = useState<Issue | null>(null);
-  const [dragOverStatusId, setDragOverStatusId] = useState<string | null>(null);
   const [filters, setFilters] = useState<Filters>(EMPTY_FILTERS);
 
   // Keep board cards in sync when the panel edits an issue (router.refresh())
@@ -98,14 +96,9 @@ export function Board({
     [issues]
   );
 
-  const handleDragOver = useCallback(({ over }: DragOverEvent) => {
-    setDragOverStatusId(over ? String(over.id) : null);
-  }, []);
-
   const handleDragEnd = useCallback(
     async ({ active, over }: DragEndEvent) => {
       setActiveIssue(null);
-      setDragOverStatusId(null);
 
       if (!over || active.id === over.id) return;
 
@@ -168,7 +161,6 @@ export function Board({
           sensors={sensors}
           collisionDetection={closestCorners}
           onDragStart={handleDragStart}
-          onDragOver={handleDragOver}
           onDragEnd={handleDragEnd}
         >
           <div className="flex h-full">

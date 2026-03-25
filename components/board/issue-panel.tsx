@@ -230,6 +230,8 @@ export function IssuePanel({ issue, users, canEdit, projectIssues, slug, current
   const [commentBody, setCommentBody] = useState("");
   const [submittingComment, setSubmittingComment] = useState(false);
   const [commentError, setCommentError] = useState<string | null>(null);
+  const [deletingCommentId, setDeletingCommentId] = useState<string | null>(null);
+  const [deleteCommentError, setDeleteCommentError] = useState<string | null>(null);
   const [addingLink, setAddingLink] = useState(false);
   const [linkDirection, setLinkDirection] = useState("BLOCKS");
   const [linkTarget, setLinkTarget] = useState("");
@@ -558,6 +560,9 @@ export function IssuePanel({ issue, users, canEdit, projectIssues, slug, current
             {issue.comments.length === 0 && (
               <p className="text-xs text-muted-foreground">No comments yet.</p>
             )}
+            {deleteCommentError && (
+              <p className="text-xs text-destructive">{deleteCommentError}</p>
+            )}
 
             {issue.comments.map((comment) => (
               <div key={comment.id} className="flex gap-2">
@@ -576,11 +581,20 @@ export function IssuePanel({ issue, users, canEdit, projectIssues, slug, current
                     </span>
                     {(comment.author.id === currentUserId || canEdit) && (
                       <button
+                        disabled={deletingCommentId === comment.id}
                         onClick={async () => {
-                          await fetch(`/api/v1/issues/${issue.id}/comments/${comment.id}`, { method: "DELETE" });
-                          router.refresh();
+                          setDeletingCommentId(comment.id);
+                          setDeleteCommentError(null);
+                          const res = await fetch(`/api/v1/issues/${issue.id}/comments/${comment.id}`, { method: "DELETE" });
+                          setDeletingCommentId(null);
+                          if (!res.ok) {
+                            const data = await res.json().catch(() => ({}));
+                            setDeleteCommentError(data.error ?? "Failed to delete comment.");
+                          } else {
+                            router.refresh();
+                          }
                         }}
-                        className="ml-auto text-muted-foreground hover:text-destructive transition-colors"
+                        className="ml-auto text-muted-foreground hover:text-destructive transition-colors disabled:opacity-40"
                         aria-label="Delete comment"
                       >
                         <X className="h-3 w-3" />

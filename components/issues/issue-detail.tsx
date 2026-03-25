@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
-import { ArrowLeft, Plus, Bug, CheckSquare2, Sparkles, BookOpen, CircleDot, X, Trash2, type LucideProps } from "lucide-react";
+import { ArrowLeft, Plus, Bug, CheckSquare2, Sparkles, BookOpen, CircleDot, X, type LucideProps } from "lucide-react";
 
 const ICON_MAP: Record<string, React.ComponentType<LucideProps>> = {
   "bug": Bug,
@@ -84,6 +84,8 @@ export function IssueDetail({ issue, users, canEdit, projectIssues, slug, curren
   const [commentBody, setCommentBody] = useState("");
   const [submittingComment, setSubmittingComment] = useState(false);
   const [commentError, setCommentError] = useState<string | null>(null);
+  const [deletingCommentId, setDeletingCommentId] = useState<string | null>(null);
+  const [deleteCommentError, setDeleteCommentError] = useState<string | null>(null);
 
   // Inline title editing
   const [editingTitle, setEditingTitle] = useState(false);
@@ -295,6 +297,9 @@ export function IssueDetail({ issue, users, canEdit, projectIssues, slug, curren
             {issue.comments.length === 0 && (
               <p className="text-sm text-muted-foreground">No comments yet.</p>
             )}
+            {deleteCommentError && (
+              <p className="text-xs text-destructive">{deleteCommentError}</p>
+            )}
 
             {issue.comments.map((comment) => (
               <div key={comment.id} className="flex gap-3">
@@ -311,11 +316,20 @@ export function IssueDetail({ issue, users, canEdit, projectIssues, slug, curren
                     </span>
                     {(comment.author.id === currentUserId || canEdit) && (
                       <button
+                        disabled={deletingCommentId === comment.id}
                         onClick={async () => {
-                          await fetch(`/api/v1/issues/${issue.id}/comments/${comment.id}`, { method: "DELETE" });
-                          router.refresh();
+                          setDeletingCommentId(comment.id);
+                          setDeleteCommentError(null);
+                          const res = await fetch(`/api/v1/issues/${issue.id}/comments/${comment.id}`, { method: "DELETE" });
+                          setDeletingCommentId(null);
+                          if (!res.ok) {
+                            const data = await res.json().catch(() => ({}));
+                            setDeleteCommentError(data.error ?? "Failed to delete comment.");
+                          } else {
+                            router.refresh();
+                          }
                         }}
-                        className="ml-auto text-muted-foreground hover:text-destructive transition-colors"
+                        className="ml-auto text-muted-foreground hover:text-destructive transition-colors disabled:opacity-40"
                         aria-label="Delete comment"
                       >
                         <X className="h-3.5 w-3.5" />

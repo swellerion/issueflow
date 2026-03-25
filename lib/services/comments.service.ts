@@ -26,14 +26,3 @@ export async function createComment(input: {
   });
 }
 
-export async function deleteComment(commentId: string, requestingUserId: string): Promise<void> {
-  const comment = await db.comment.findUnique({
-    where: { id: commentId },
-    select: { authorId: true, issueId: true },
-  });
-  if (!comment) throw new Error("Comment not found.");
-  if (comment.authorId !== requestingUserId) {
-    throw new Error("Forbidden.");
-  }
-  await db.comment.delete({ where: { id: commentId } });
-}
