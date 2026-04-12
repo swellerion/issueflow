@@ -23,7 +23,7 @@ Lean issue tracking inspired by Jira. Kanban board with workflow automation, rol
 
 | Layer | Choice |
 |---|---|
-| Framework | Next.js 16 (App Router, Turbopack) · TypeScript |
+| Framework | Next.js 16 (App Router) · TypeScript |
 | Styling | Tailwind CSS v4 · shadcn/ui · IONOS Design System |
 | ORM | Prisma 7 |
 | Database | PostgreSQL 17 |
