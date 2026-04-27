@@ -9,6 +9,10 @@ on:
 jobs:
   test:
     runs-on: ubuntu-latest
+    
+    permissions:
+      contents: read
+      pull-requests: write
 
     services:
       postgres:
@@ -37,7 +41,7 @@ jobs:
           cache: npm
 
       - name: Install dependencies
-        run: npm ci
+        run: npm ci --legacy-peer-deps
 
       - name: Generate Prisma client
         run: npx prisma generate
@@ -51,7 +55,10 @@ jobs:
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          DIFF=$(git diff origin/${{ github.base_ref }}...HEAD --stat)
+          DIFF=$(git diff origin/${{ github.base_ref }}...HEAD --stat 2>/dev/null || echo "No diff available")
+          if [ -z "$DIFF" ] || [ "$DIFF" = "No diff available" ]; then
+            DIFF="Initial CI test - no file changes"
+          fi
           RESPONSE=$(curl -s https://api.anthropic.com/v1/messages \
             -H "x-api-key: $ANTHROPIC_API_KEY" \
             -H "anthropic-version: 2023-06-01" \
@@ -65,4 +72,4 @@ jobs:
                 \"content\": \"Changed files in this PR:\n$DIFF\nWhat should be tested?\"
               }]
             }" | jq -r '.content[0].text')
-          gh pr comment ${{ github.event.pull_request.number }} --body "## 🤖 AI Test Analysis\n\n$RESPONSE"        
+          gh pr comment ${{ github.event.pull_request.number }} --body "## 🤖 AI Test Analysis\n\n$RESPONSE"
