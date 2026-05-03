@@ -1,12 +1,14 @@
 import NextAuth from "next-auth";
 import Credentials from "next-auth/providers/credentials";
 import { verifyUser } from "@/lib/services/users.service";
+import { authConfig } from "@/lib/auth.config";
 
 if (!process.env.AUTH_SECRET) {
   throw new Error("AUTH_SECRET environment variable is not set.");
 }
 
 export const { handlers, signIn, signOut, auth } = NextAuth({
+  ...authConfig,
   providers: [
     Credentials({
       credentials: {
@@ -28,10 +30,6 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
       },
     }),
   ],
-  session: { strategy: "jwt" },
-  pages: {
-    signIn: "/login",
-  },
   callbacks: {
     jwt({ token, user }) {
       if (user) token.id = user.id;
