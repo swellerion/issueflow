@@ -1,5 +1,5 @@
 import { redirect } from "next/navigation";
-import { auth } from "@/lib/auth";
+import { auth, signOut } from "@/lib/auth";
 import { getUserFlags } from "@/lib/services/users.service";
 import { getProjects } from "@/lib/services/projects.service";
 
@@ -8,6 +8,8 @@ export default async function BoardRedirect() {
   if (!session?.user?.id) redirect("/login");
 
   const userFlags = await getUserFlags(session.user.id);
+  if (!userFlags) await signOut({ redirectTo: "/login" });
+
   const isSuperAdmin = userFlags?.isSuperAdmin ?? false;
   const projects = await getProjects(session.user.id, isSuperAdmin);
 
