@@ -1,5 +1,5 @@
-import { notFound } from "next/navigation";
-import { auth } from "@/lib/auth";
+import { notFound, redirect } from "next/navigation";
+import { auth, signOut } from "@/lib/auth";
 import { getUserFlags } from "@/lib/services/users.service";
 import { getProjects, getProjectBySlug, getMembership } from "@/lib/services/projects.service";
 import { canManageMembers } from "@/lib/permissions";
@@ -14,9 +14,10 @@ export default async function SlugLayout({
 }) {
   const { slug } = await params;
   const session = await auth();
-  if (!session?.user?.id) notFound();
+  if (!session?.user?.id) redirect("/login");
 
   const userFlags = await getUserFlags(session.user.id);
+  if (!userFlags) await signOut({ redirectTo: "/login" });
   const isSuperAdmin = userFlags?.isSuperAdmin ?? false;
 
   const [project, projects] = await Promise.all([

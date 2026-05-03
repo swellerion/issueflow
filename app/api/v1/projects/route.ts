@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { createProject, getProjects } from "@/lib/services/projects.service";
+import { Prisma } from "@/app/generated/prisma/client";
 
 export async function GET() {
   const session = await auth();
@@ -59,6 +60,13 @@ export async function POST(request: Request) {
       message.startsWith("Slug must")
     ) {
       return NextResponse.json({ error: message }, { status: 422 });
+    }
+
+    if (
+      error instanceof Prisma.PrismaClientKnownRequestError &&
+      error.code === "P2003"
+    ) {
+      return NextResponse.json({ error: "Unauthorized." }, { status: 401 });
     }
 
     console.error("[POST /api/v1/projects]", error);
